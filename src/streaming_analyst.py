@@ -13,7 +13,7 @@ File structure:
         Return the popularity index. Useful to estimate the recent raising of
         popularity of an artist, track, or album.
     * search_spotify_id
-        Return the Spotify ID that has to be passed to get_popularity.
+        Auxiliary function for the previous one that searches for a query.
 
 * Last.FM functions
     * get_lastfm_info
@@ -25,7 +25,7 @@ File structure:
         Return various information about tracks and users. Soundcloud has no
         native album type; they are treated as playlists.
     * search_soundcloud
-        Auxiliary function for the above one that search for a query.
+        Auxiliary function for the previous one that searches for a query.
     * get_soundcloud_client_id
         We need to send a get request to the Soundcloud webpage in order to get
         the Client ID. This has to be done for every call to search_soundcloud,
@@ -107,11 +107,11 @@ token = AccessToken()
 # Spotify Functions
 # ==============================================================================
 @mcp.tool()
-def get_popularity(spotify_id: str, kind: str) -> int:
+def get_popularity(query: str, kind: str) -> int:
     """
     Get Spotify popularity score (0-100) for a track, artist, or album.
 
-    :param spotify_id: Spotify ID (e.g. '2lTm559tuIvatlT1u0JYG2')
+    :param query: search string (e.g. 'Purple Rain')
     :param kind: one of 'track', 'artist', 'album'
     :raises ValueError: if kind is invalid
     :raises RuntimeError: if the API call fails
@@ -121,6 +121,7 @@ def get_popularity(spotify_id: str, kind: str) -> int:
             f"Invalid kind '{kind}'. Must be 'track', 'artist', or 'album'."
         )
 
+    spotify_id = search_spotify_id(query, kind)
     access_token = token.get()
 
     url = f"https://api.spotify.com/v1/{kind}s/{spotify_id}"
@@ -139,7 +140,6 @@ def search_spotify_id(query: str, kind: str) -> str:
 
     :param query: search string (e.g. 'Purple Rain')
     :param kind: one of 'track', 'artist', 'album'
-    :param access_token: valid OAuth access token
     :returns: Spotify ID of the top result
     """
     if kind not in ("track", "artist", "album"):
