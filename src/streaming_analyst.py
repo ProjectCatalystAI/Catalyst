@@ -1,3 +1,31 @@
+"""
+================================================================================
+Streaming Analyst
+================================================================================
+
+The following functions can be run by agents using MCP to retrieve information
+about artists, tracks, and albums on various DSPs.
+
+File structure:
+* Spotify functions
+    * get_popularity
+      Return the popularity index. Useful to estimate the recent raising of
+      popularity of an artist, track, or album.
+    * search_spotify_id
+      Return the Spotify ID that has to be passed to get_popularity.
+* Last.FM functions
+    * get_lastfm_info
+      Return various information such as playcount, listeners, genres, and
+      similar artists.
+
+TODO: If we want to monitor specific artists, tracks, or albums, we could let
+      the agent execute these functions periodically (e.g., once a day) to save
+      the relevant data into a CSV. It would help to understand how much an
+      artist, track, or album is raising (e.g., monitoring the popularity
+      index).
+TODO: At the end, we could cross-reference all the gathered data.
+"""
+
 import os
 import time
 from typing import Any
@@ -6,8 +34,10 @@ import requests
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
+# ==============================================================================
+# Constants Loading
+# ==============================================================================
 load_dotenv()
-
 SPOTIFY_CLIENT_ID = os.environ["SPOTIFY_CLIENT_ID"]
 SPOTIFY_CLIENT_SECRET = os.environ["SPOTIFY_CLIENT_SECRET"]
 LASTFM_API_KEY = os.environ["LASTFM_API_KEY"]
@@ -15,6 +45,12 @@ LASTFM_API_SECRET = os.environ["LASTFM_API_SECRET"]
 LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/"
 
 
+# ==============================================================================
+# AccessToken Class
+# ==============================================================================
+# A class to conveniently cache the Bearer token needed to send API requests
+# to Spotify.
+# ------------------------------------------------------------------------------
 class AccessToken:
     def __init__(self):
         self._token: str | None = None
@@ -40,6 +76,9 @@ mcp = FastMCP("spotify-charts")
 token = AccessToken()
 
 
+# ==============================================================================
+# Spotify Functions
+# ==============================================================================
 @mcp.tool()
 def get_popularity(spotify_id: str, kind: str) -> int:
     """
@@ -97,6 +136,9 @@ def search_spotify_id(query: str, kind: str) -> str:
     return items[0]["id"]
 
 
+# ==============================================================================
+# Last.FM Functions
+# ==============================================================================
 @mcp.tool()
 def get_lastfm_info(
     artist: str, track: str | None = None, album: str | None = None
