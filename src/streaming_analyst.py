@@ -133,7 +133,6 @@ def get_popularity(query: str, kind: str) -> int:
     return r.json()["popularity"]
 
 
-@mcp.tool()
 def search_spotify_id(query: str, kind: str) -> str:
     """
     Search for a track/artist/album by name and return its Spotify ID.
@@ -284,7 +283,6 @@ def get_soundcloud_info(query: str, kind: str) -> dict:
         }
 
 
-@mcp.tool()
 def search_soundcloud(query: str, kind: str) -> dict:
     """
     Search SoundCloud for a track, artist, or playlist by name.
@@ -307,7 +305,6 @@ def search_soundcloud(query: str, kind: str) -> dict:
     return data[0]  # best match
 
 
-@mcp.tool()
 def get_soundcloud_client_id() -> str:
     """
     Fetches the SoundCloud homepage, finds the JS bundle URLs, and searches
