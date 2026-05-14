@@ -27,6 +27,7 @@ TODO: At the end, we could cross-reference all the gathered data.
 """
 
 import os
+import re
 import time
 from typing import Any
 
@@ -38,11 +39,16 @@ from fastmcp import FastMCP
 # Constants Loading
 # ==============================================================================
 load_dotenv()
+
 SPOTIFY_CLIENT_ID = os.environ["SPOTIFY_CLIENT_ID"]
 SPOTIFY_CLIENT_SECRET = os.environ["SPOTIFY_CLIENT_SECRET"]
+
 LASTFM_API_KEY = os.environ["LASTFM_API_KEY"]
 LASTFM_API_SECRET = os.environ["LASTFM_API_SECRET"]
 LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/"
+
+SOUNDCLOUD_BASE = "https://api.soundcloud.com"
+SOUNDCLOUD_BASE_V2 = "https://api-v2.soundcloud.com"
 
 
 # ==============================================================================
@@ -208,6 +214,102 @@ def get_lastfm_info(
             ),
         },
     }
+
+
+# ==============================================================================
+# Soundcloud Functions
+# ==============================================================================
+@mcp.tool()
+def get_soundcloud_info(query: str, kind: str) -> dict:
+    """
+    Searches for the best match and returns a cleaned dictionary of relevant fields.
+
+    :param query: The search query string.
+    :param kind: The type of resource ('track' or 'user').
+    :returns: A dictionary with resource-specific fields:
+              - track: 'title', 'artist', 'plays', 'likes', 'reposts', 'comments',
+                       'downloads', 'duration_s', 'genre', 'created_at', 'tags'.
+              - user: 'full_name', 'followers', 'following', 'tracks',
+                      'playlists', 'reposts', 'location'.
+    :raises ValueError: If no results are found for the given query.
+    """
+    data = search_soundcloud(query, kind)
+
+    if kind == "track":
+        return {
+            "title": data["title"],
+            "artist": data["user"]["username"],
+            "plays": data.get("playback_count", 0),
+            "likes": data.get("likes_count", 0),
+            "reposts": data.get("reposts_count", 0),
+            "comments": data.get("comment_count", 0),
+            "downloads": data.get("download_count", 0),
+            "duration_s": data["duration"] // 1000,
+            "genre": data.get("genre"),
+            "created_at": data.get("created_at"),
+            "tags": data.get("tag_list"),
+        }
+    elif kind == "user":
+        return {
+            "full_name": data.get("full_name"),
+            "followers": data.get("followers_count", 0),
+            "following": data.get("followings_count", 0),
+            "tracks": data.get("track_count", 0),
+            "playlists": data.get("playlist_count", 0),
+            "reposts": data.get("reposts_count", 0),
+            "location": f"{data.get('city', '')}, {data.get('country_code', '')}".strip(
+                ", "
+            ),
+        }
+
+
+@mcp.tool()
+def search_soundcloud(query: str, kind: str) -> dict:
+    """
+    Search SoundCloud for a track, artist, or playlist by name.
+
+    :param query: The search query string.
+    :param kind: The type of resource to search for ('track' or 'user').
+    :returns: A dictionary representing the best matching resource.
+    :raises ValueError: If no results are found for the given query.
+    """
+    client_id = get_soundcloud_client_id()
+    r = requests.get(
+        f"{SOUNDCLOUD_BASE_V2}/search/{kind}s",
+        params={"q": query, "client_id": client_id, "limit": 5},
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    r.raise_for_status()
+    data = r.json().get("collection", [])
+    if not data:
+        raise ValueError(f"No results found for {kind.capitalize()}: '{query}'")
+    return data[0]  # best match
+
+
+@mcp.tool()
+def get_soundcloud_client_id() -> str:
+    """
+    Fetches the SoundCloud homepage, finds the JS bundle URLs, and searches
+    each bundle for the client_id string.
+
+    :returns: The client_id as a string.
+    :raises RuntimeError: If the client_id could not be found in any bundle.
+    """
+    html = requests.get(
+        "https://soundcloud.com", headers={"User-Agent": "Mozilla/5.0"}
+    ).text
+
+    js_urls = re.findall(
+        r'<script[^>]+src="(https://a-v2\.sndcdn\.com/assets/[^"]+\.js)"', html
+    )
+
+    for url in reversed(js_urls):  # last bundles are more likely to have the client_id
+        js = requests.get(url).text
+        match = re.search(r'client_id\s*:\s*"([a-zA-Z0-9]{32})"', js)
+        if match:
+            return match.group(1)
+
+    raise RuntimeError("client_id not found")
 
 
 if __name__ == "__main__":
