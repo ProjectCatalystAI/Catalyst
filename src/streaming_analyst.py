@@ -64,5 +64,36 @@ def get_popularity(spotify_id: str, kind: str) -> int:
     return r.json()["popularity"]
 
 
+@mcp.tool()
+def search_spotify_id(query: str, kind: str) -> str:
+    """
+    Search for a track/artist/album by name and return its Spotify ID.
+
+    :param query: search string (e.g. 'Purple Rain')
+    :param kind: one of 'track', 'artist', 'album'
+    :param access_token: valid OAuth access token
+    :returns: Spotify ID of the top result
+    """
+    if kind not in ("track", "artist", "album"):
+        raise ValueError(
+            f"Invalid kind '{kind}'. Must be 'track', 'artist', or 'album'."
+        )
+
+    access_token = token.get()
+
+    r = requests.get(
+        "https://api.spotify.com/v1/search",
+        headers={"Authorization": f"Bearer {access_token}"},
+        params={"q": query, "type": kind, "limit": 1},
+    )
+    r.raise_for_status()
+
+    items = r.json()[f"{kind}s"]["items"]
+    if not items:
+        raise RuntimeError(f"No {kind} found for query '{query}'.")
+
+    return items[0]["id"]
+
+
 if __name__ == "__main__":
     mcp.run()
