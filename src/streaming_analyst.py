@@ -1,5 +1,6 @@
 import os
 import time
+from typing import Any
 
 import requests
 from dotenv import load_dotenv
@@ -7,8 +8,11 @@ from fastmcp import FastMCP
 
 load_dotenv()
 
-CLIENT_ID = os.environ["CLIENT_ID"]
-CLIENT_SECRET = os.environ["CLIENT_SECRET"]
+SPOTIFY_CLIENT_ID = os.environ["SPOTIFY_CLIENT_ID"]
+SPOTIFY_CLIENT_SECRET = os.environ["SPOTIFY_CLIENT_SECRET"]
+LASTFM_API_KEY = os.environ["LASTFM_API_KEY"]
+LASTFM_API_SECRET = os.environ["LASTFM_API_SECRET"]
+LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/"
 
 
 class AccessToken:
@@ -26,7 +30,7 @@ class AccessToken:
         r = requests.post(
             "https://accounts.spotify.com/api/token",
             data={"grant_type": "client_credentials"},
-            auth=(CLIENT_ID, CLIENT_SECRET),
+            auth=(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET),
         )
         r.raise_for_status()
         return r.json()["access_token"]
@@ -91,6 +95,77 @@ def search_spotify_id(query: str, kind: str) -> str:
         raise RuntimeError(f"No {kind} found for query '{query}'.")
 
     return items[0]["id"]
+
+
+@mcp.tool()
+def get_lastfm_info(
+    artist: str, track: str | None = None, album: str | None = None
+) -> dict[str, Any]:
+    """
+    Fetch info for an artist, track, or album from Last.fm.
+
+    Infers the query type from the provided arguments:
+    - only artist -> artist info
+    - artist + track -> track info
+    - artist + album -> album info
+
+    :param artist: The name of the artist.
+    :param track: The name of the track (mutually exclusive with album).
+    :param album: The name of the album (mutually exclusive with track).
+    :returns: A dictionary with 'name', 'listeners', 'playcount', and 'meta'
+              (the latter containing 'tags' and 'similar_artist').
+    :raises ValueError: If both track and album are specified.
+    """
+    if track and album:
+        raise ValueError("You must specify either 'track' or 'album', not both.")
+
+    if track:
+        target = "track"
+        method = "track.getInfo"
+        params = {"artist": artist, "track": track}
+    elif album:
+        target = "album"
+        method = "album.getInfo"
+        params = {"artist": artist, "album": album}
+    else:
+        target = "artist"
+        method = "artist.getInfo"
+        params = {"artist": artist}
+
+    params = params | {
+        "method": method,
+        "api_key": LASTFM_API_KEY,
+        "format": "json",
+    }
+
+    r = requests.get(LASTFM_BASE, params=params)
+    r.raise_for_status()
+    r = r.json()
+
+    if "error" in r and r["error"]:
+        raise RuntimeError(
+            f"Error during the request for (artist={artist}, track={track}, album={album}). Response:\n{r}"
+        )
+
+    data = r[target]
+    stats = data.get("stats", {})
+
+    return {
+        "name": data.get("name"),
+        "listeners": data.get("listeners") or stats.get("listeners"),
+        "playcount": data.get("playcount") or stats.get("plays"),
+        "meta": {
+            "tags": list(
+                map(
+                    lambda x: x["name"],
+                    data.get("toptags", data.get("tags", {})).get("tag", {}),
+                )
+            ),
+            "similar_artist": list(
+                map(lambda x: x["name"], data.get("similar", {}).get("artist", {}))
+            ),
+        },
+    }
 
 
 if __name__ == "__main__":
