@@ -72,7 +72,7 @@ class AccessToken:
         return r.json()["access_token"]
 
 
-mcp = FastMCP("spotify-charts")
+mcp = FastMCP("streaming-analyst")
 token = AccessToken()
 
 
