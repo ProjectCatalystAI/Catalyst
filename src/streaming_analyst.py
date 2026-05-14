@@ -57,9 +57,7 @@ def get_popularity(spotify_id: str, kind: str) -> int:
     headers = {"Authorization": f"Bearer {access_token}"}
 
     r = requests.get(url, headers=headers)
-
-    if r.status_code != 200:
-        raise RuntimeError(f"Spotify API error {r.status_code}: {r.text}")
+    r.raise_for_status()
 
     return r.json()["popularity"]
 
