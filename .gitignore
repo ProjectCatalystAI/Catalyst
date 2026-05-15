@@ -5,3 +5,5 @@ pyrightconfig.json
 
 # Misc
 .env
+
+catalyst.db
