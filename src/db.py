@@ -3,8 +3,8 @@
 SQLAlchemy Database
 ================================================================================
 
-This is the structure of the database. It contains the field retrieved from
-the APIs and some columns that will be fill in by the Agent.
+This is the structure of the database. It contains the fields retrieved from
+the APIs and some columns that will be filled in by the Agent.
 
 Tables:
 
@@ -12,15 +12,25 @@ Tables:
 * track_genre
 * catalog
 * artist
+* spotify_artist
+* spotify_artist_historic
 * instagram_artist
+* instagram_artist_historic
 * tiktok_artist
+* tiktok_artist_historic
 * youtube_artist
+* youtube_artist_historic
 * track
+* spotify_track
+* spotify_track_historic
 * instagram_track
+* instagram_track_historic
 * instagram_video_track
 * tiktok_track
+* tiktok_track_historic
 * tiktok_video_track
 * youtube_track
+* youtube_track_historic
 * youtube_video_track
 * youtube_short_track
 """
@@ -76,16 +86,58 @@ class Artist(Base):
     __tablename__ = "artist"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    spotify_id: Mapped[str | None] = mapped_column(String)
     name: Mapped[str] = mapped_column(String)
-    summary: Mapped[str | None] = mapped_column(Text)
-    instagram_analysis: Mapped[str | None] = mapped_column(Text)
-    tiktok_analysis: Mapped[str | None] = mapped_column(Text)
-    youtube_analysis: Mapped[str | None] = mapped_column(Text)
+    country: Mapped[str | None] = mapped_column(String)
+    bio: Mapped[str | None] = mapped_column(Text)
+    analysis: Mapped[str | None] = mapped_column(Text)
 
     tracks: Mapped[list["Track"]] = relationship(back_populates="artist")
+    spotify: Mapped["SpotifyArtist | None"] = relationship(back_populates="artist")
+    spotify_historic: Mapped[list["SpotifyArtistHistoric"]] = relationship(
+        back_populates="artist"
+    )
     instagram: Mapped["InstagramArtist | None"] = relationship(back_populates="artist")
+    instagram_historic: Mapped[list["InstagramArtistHistoric"]] = relationship(
+        back_populates="artist"
+    )
     tiktok: Mapped["TiktokArtist | None"] = relationship(back_populates="artist")
+    tiktok_historic: Mapped[list["TiktokArtistHistoric"]] = relationship(
+        back_populates="artist"
+    )
     youtube: Mapped["YoutubeArtist | None"] = relationship(back_populates="artist")
+    youtube_historic: Mapped[list["YoutubeArtistHistoric"]] = relationship(
+        back_populates="artist"
+    )
+
+
+class SpotifyArtist(Base):
+    __tablename__ = "spotify_artist"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    artist_id: Mapped[int] = mapped_column(ForeignKey("artist.id"))
+    streams: Mapped[int | None] = mapped_column(Integer)
+    monthly_listeners: Mapped[int | None] = mapped_column(Integer)
+    popularity_current: Mapped[int | None] = mapped_column(Integer)
+    followers_total: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
+
+    artist: Mapped["Artist"] = relationship(back_populates="spotify")
+
+
+class SpotifyArtistHistoric(Base):
+    __tablename__ = "spotify_artist_historic"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    artist_id: Mapped[int] = mapped_column(ForeignKey("artist.id"))
+    date: Mapped[date | None] = mapped_column(Date)
+    popularity_current: Mapped[int | None] = mapped_column(Integer)
+    followers_total: Mapped[int | None] = mapped_column(Integer)
+    monthly_listeners: Mapped[int | None] = mapped_column(Integer)
+    streams_total: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
+
+    artist: Mapped["Artist"] = relationship(back_populates="spotify_historic")
 
 
 class InstagramArtist(Base):
@@ -100,8 +152,25 @@ class InstagramArtist(Base):
     followers: Mapped[int | None] = mapped_column(Integer)
     video_reach: Mapped[int | None] = mapped_column(Integer)
     engagement: Mapped[float | None]
+    analysis: Mapped[str | None] = mapped_column(Text)
 
     artist: Mapped["Artist"] = relationship(back_populates="instagram")
+
+
+class InstagramArtistHistoric(Base):
+    __tablename__ = "instagram_artist_historic"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    artist_id: Mapped[int] = mapped_column(ForeignKey("artist.id"))
+    date: Mapped[date | None] = mapped_column(Date)
+    video_count: Mapped[int | None] = mapped_column(Integer)
+    views: Mapped[int | None] = mapped_column(Integer)
+    likes: Mapped[int | None] = mapped_column(Integer)
+    comments: Mapped[int | None] = mapped_column(Integer)
+    followers: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
+
+    artist: Mapped["Artist"] = relationship(back_populates="instagram_historic")
 
 
 class TiktokArtist(Base):
@@ -118,8 +187,27 @@ class TiktokArtist(Base):
     profile_likes: Mapped[int | None] = mapped_column(Integer)
     video_reach: Mapped[int | None] = mapped_column(Integer)
     engagement: Mapped[float | None]
+    analysis: Mapped[str | None] = mapped_column(Text)
 
     artist: Mapped["Artist"] = relationship(back_populates="tiktok")
+
+
+class TiktokArtistHistoric(Base):
+    __tablename__ = "tiktok_artist_historic"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    artist_id: Mapped[int] = mapped_column(ForeignKey("artist.id"))
+    date: Mapped[date | None] = mapped_column(Date)
+    video_count: Mapped[int | None] = mapped_column(Integer)
+    views: Mapped[int | None] = mapped_column(Integer)
+    likes: Mapped[int | None] = mapped_column(Integer)
+    shares: Mapped[int | None] = mapped_column(Integer)
+    comments: Mapped[int | None] = mapped_column(Integer)
+    followers: Mapped[int | None] = mapped_column(Integer)
+    profile_likes: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
+
+    artist: Mapped["Artist"] = relationship(back_populates="tiktok_historic")
 
 
 class YoutubeArtist(Base):
@@ -136,12 +224,28 @@ class YoutubeArtist(Base):
     video_likes: Mapped[int | None] = mapped_column(Integer)
     video_comments: Mapped[int | None] = mapped_column(Integer)
     video_reach: Mapped[int | None] = mapped_column(Integer)
-    short_count: Mapped[int | None] = mapped_column(Integer)
+    shorts_count: Mapped[int | None] = mapped_column(Integer)
     shorts_views: Mapped[int | None] = mapped_column(Integer)
     shorts_likes: Mapped[int | None] = mapped_column(Integer)
     shorts_comments: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
 
     artist: Mapped["Artist"] = relationship(back_populates="youtube")
+
+
+class YoutubeArtistHistoric(Base):
+    __tablename__ = "youtube_artist_historic"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    artist_id: Mapped[int] = mapped_column(ForeignKey("artist.id"))
+    date: Mapped[date | None] = mapped_column(Date)
+    subscribers: Mapped[int | None] = mapped_column(Integer)
+    views: Mapped[int | None] = mapped_column(Integer)
+    likes: Mapped[int | None] = mapped_column(Integer)
+    comments: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
+
+    artist: Mapped["Artist"] = relationship(back_populates="youtube_historic")
 
 
 # ===========================================================================
@@ -153,9 +257,12 @@ class Track(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     catalog_id: Mapped[int] = mapped_column(ForeignKey("catalog.id"))
     artist_id: Mapped[int] = mapped_column(ForeignKey("artist.id"))
+    spotify_id: Mapped[str | None] = mapped_column(String)
+    isrc: Mapped[str | None] = mapped_column(String)
     title: Mapped[str] = mapped_column(String)
     collaborators: Mapped[str | None] = mapped_column(String)
     release_date: Mapped[date | None] = mapped_column(Date)
+    analysis: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)
     instagram_analysis: Mapped[str | None] = mapped_column(Text)
     instagram_top5_videos_analysis: Mapped[str | None] = mapped_column(Text)
@@ -168,9 +275,50 @@ class Track(Base):
     catalog: Mapped["Catalog"] = relationship(back_populates="tracks")
     artist: Mapped["Artist"] = relationship(back_populates="tracks")
     genres: Mapped[list["TrackGenre"]] = relationship(back_populates="track")
+    spotify: Mapped["SpotifyTrack | None"] = relationship(back_populates="track")
+    spotify_historic: Mapped[list["SpotifyTrackHistoric"]] = relationship(
+        back_populates="track"
+    )
     instagram: Mapped["InstagramTrack | None"] = relationship(back_populates="track")
+    instagram_historic: Mapped[list["InstagramTrackHistoric"]] = relationship(
+        back_populates="track"
+    )
     tiktok: Mapped["TiktokTrack | None"] = relationship(back_populates="track")
+    tiktok_historic: Mapped[list["TiktokTrackHistoric"]] = relationship(
+        back_populates="track"
+    )
     youtube: Mapped["YoutubeTrack | None"] = relationship(back_populates="track")
+    youtube_historic: Mapped[list["YoutubeTrackHistoric"]] = relationship(
+        back_populates="track"
+    )
+
+
+class SpotifyTrack(Base):
+    __tablename__ = "spotify_track"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("track.id"))
+    streams: Mapped[int | None] = mapped_column(Integer)
+    popularity: Mapped[int | None] = mapped_column(Integer)
+    playlists_current: Mapped[int | None] = mapped_column(Integer)
+    playlists_total: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
+
+    track: Mapped["Track"] = relationship(back_populates="spotify")
+
+
+class SpotifyTrackHistoric(Base):
+    __tablename__ = "spotify_track_historic"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("track.id"))
+    date: Mapped[date | None] = mapped_column(Date)
+    streams: Mapped[int | None] = mapped_column(Integer)
+    popularity: Mapped[int | None] = mapped_column(Integer)
+    playlists_current: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
+
+    track: Mapped["Track"] = relationship(back_populates="spotify_historic")
 
 
 class InstagramTrack(Base):
@@ -179,15 +327,32 @@ class InstagramTrack(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     track_id: Mapped[int] = mapped_column(ForeignKey("track.id"))
     video_count: Mapped[int | None] = mapped_column(Integer)
+    views: Mapped[int | None] = mapped_column(Integer)
     likes: Mapped[int | None] = mapped_column(Integer)
     comments: Mapped[int | None] = mapped_column(Integer)
     creator_reach: Mapped[int | None] = mapped_column(Integer)
     engagement: Mapped[float | None]
+    analysis: Mapped[str | None] = mapped_column(Text)
 
     track: Mapped["Track"] = relationship(back_populates="instagram")
     videos: Mapped[list["InstagramVideoTrack"]] = relationship(
         back_populates="instagram_track"
     )
+
+
+class InstagramTrackHistoric(Base):
+    __tablename__ = "instagram_track_historic"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("track.id"))
+    date: Mapped[date | None] = mapped_column(Date)
+    video_count: Mapped[int | None] = mapped_column(Integer)
+    views: Mapped[int | None] = mapped_column(Integer)
+    likes: Mapped[int | None] = mapped_column(Integer)
+    comments: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
+
+    track: Mapped["Track"] = relationship(back_populates="instagram_historic")
 
 
 class InstagramVideoTrack(Base):
@@ -199,11 +364,13 @@ class InstagramVideoTrack(Base):
     views: Mapped[int | None] = mapped_column(Integer)
     likes: Mapped[int | None] = mapped_column(Integer)
     comments: Mapped[int | None] = mapped_column(Integer)
-    url: Mapped[str | None] = mapped_column(String)
+    video_id: Mapped[str | None] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(Text)
     name: Mapped[str | None] = mapped_column(String)
     user_country: Mapped[str | None] = mapped_column(String)
     username: Mapped[str | None] = mapped_column(String)
     user_followers: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
 
     instagram_track: Mapped["InstagramTrack"] = relationship(back_populates="videos")
 
@@ -215,15 +382,33 @@ class TiktokTrack(Base):
     track_id: Mapped[int] = mapped_column(ForeignKey("track.id"))
     video_count: Mapped[int | None] = mapped_column(Integer)
     views: Mapped[int | None] = mapped_column(Integer)
+    likes: Mapped[int | None] = mapped_column(Integer)
     shares: Mapped[int | None] = mapped_column(Integer)
     comments: Mapped[int | None] = mapped_column(Integer)
     creator_reach: Mapped[int | None] = mapped_column(Integer)
     engagement: Mapped[float | None]
+    analysis: Mapped[str | None] = mapped_column(Text)
 
     track: Mapped["Track"] = relationship(back_populates="tiktok")
     videos: Mapped[list["TiktokVideoTrack"]] = relationship(
         back_populates="tiktok_track"
     )
+
+
+class TiktokTrackHistoric(Base):
+    __tablename__ = "tiktok_track_historic"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("track.id"))
+    date: Mapped[date | None] = mapped_column(Date)
+    video_count: Mapped[int | None] = mapped_column(Integer)
+    views: Mapped[int | None] = mapped_column(Integer)
+    likes: Mapped[int | None] = mapped_column(Integer)
+    shares: Mapped[int | None] = mapped_column(Integer)
+    comments: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
+
+    track: Mapped["Track"] = relationship(back_populates="tiktok_historic")
 
 
 class TiktokVideoTrack(Base):
@@ -236,11 +421,12 @@ class TiktokVideoTrack(Base):
     likes: Mapped[int | None] = mapped_column(Integer)
     comments: Mapped[int | None] = mapped_column(Integer)
     shares: Mapped[int | None] = mapped_column(Integer)
-    url: Mapped[str | None] = mapped_column(String)
+    video_id: Mapped[str | None] = mapped_column(String)
     name: Mapped[str | None] = mapped_column(String)
     user_country: Mapped[str | None] = mapped_column(String)
     username: Mapped[str | None] = mapped_column(String)
     user_followers: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
 
     tiktok_track: Mapped["TiktokTrack"] = relationship(back_populates="videos")
 
@@ -251,9 +437,16 @@ class YoutubeTrack(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     track_id: Mapped[int] = mapped_column(ForeignKey("track.id"))
     video_count: Mapped[int | None] = mapped_column(Integer)
-    views: Mapped[int | None] = mapped_column(Integer)
-    likes: Mapped[int | None] = mapped_column(Integer)
-    comments: Mapped[int | None] = mapped_column(Integer)
+    video_views: Mapped[int | None] = mapped_column(Integer)
+    video_likes: Mapped[int | None] = mapped_column(Integer)
+    video_comments: Mapped[int | None] = mapped_column(Integer)
+    shorts_count: Mapped[int | None] = mapped_column(Integer)
+    shorts_views: Mapped[int | None] = mapped_column(Integer)
+    shorts_likes: Mapped[int | None] = mapped_column(Integer)
+    shorts_comments: Mapped[int | None] = mapped_column(Integer)
+    creator_reach: Mapped[int | None] = mapped_column(Integer)
+    engagement: Mapped[float | None]
+    analysis: Mapped[str | None] = mapped_column(Text)
 
     track: Mapped["Track"] = relationship(back_populates="youtube")
     videos: Mapped[list["YoutubeVideoTrack"]] = relationship(
@@ -262,6 +455,21 @@ class YoutubeTrack(Base):
     shorts: Mapped[list["YoutubeShortTrack"]] = relationship(
         back_populates="youtube_track"
     )
+
+
+class YoutubeTrackHistoric(Base):
+    __tablename__ = "youtube_track_historic"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    track_id: Mapped[int] = mapped_column(ForeignKey("track.id"))
+    date: Mapped[date | None] = mapped_column(Date)
+    views: Mapped[int | None] = mapped_column(Integer)
+    likes: Mapped[int | None] = mapped_column(Integer)
+    comments: Mapped[int | None] = mapped_column(Integer)
+    shorts_count: Mapped[int | None] = mapped_column(Integer)
+    analysis: Mapped[str | None] = mapped_column(Text)
+
+    track: Mapped["Track"] = relationship(back_populates="youtube_historic")
 
 
 class YoutubeVideoTrack(Base):
@@ -275,8 +483,10 @@ class YoutubeVideoTrack(Base):
     comments: Mapped[int | None] = mapped_column(Integer)
     record_date: Mapped[date | None] = mapped_column(Date)
     title: Mapped[str | None] = mapped_column(String)
-    image_url: Mapped[str | None] = mapped_column(String)
+    external_id: Mapped[str | None] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(Text)
     upload_date: Mapped[date | None] = mapped_column(Date)
+    analysis: Mapped[str | None] = mapped_column(Text)
 
     youtube_track: Mapped["YoutubeTrack"] = relationship(back_populates="videos")
 
@@ -290,8 +500,10 @@ class YoutubeShortTrack(Base):
     likes: Mapped[int | None] = mapped_column(Integer)
     comments: Mapped[int | None] = mapped_column(Integer)
     title: Mapped[str | None] = mapped_column(String)
-    url: Mapped[str | None] = mapped_column(String)
+    external_id: Mapped[str | None] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(Text)
     upload_date: Mapped[date | None] = mapped_column(Date)
+    analysis: Mapped[str | None] = mapped_column(Text)
 
     youtube_track: Mapped["YoutubeTrack"] = relationship(back_populates="shorts")
 
