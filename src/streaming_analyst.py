@@ -33,6 +33,11 @@ File structure:
         called by an agent, it's not a big deal, and there are not other viable
         alternatives as far as I know.
 
+* Utils
+    * days_until
+        To calculate the number of days between today and a birthday or
+        anniversary.
+
 TODO: YouTube functions.
 TODO: If we want to monitor specific artists, tracks, or albums, we could let
       the agent execute these functions periodically (e.g., once a day) to save
@@ -50,11 +55,13 @@ TODO: At the end, we could cross-reference all the gathered data.
 import os
 import re
 import time
+from datetime import date
 from typing import Any
 
 import requests
 from dotenv import load_dotenv
-from fastmcp import FastMCP
+
+from server import mcp
 
 # ==============================================================================
 # Constants Loading
@@ -99,7 +106,6 @@ class AccessToken:
         return r.json()["access_token"]
 
 
-mcp = FastMCP("streaming-analyst")
 token = AccessToken()
 
 
@@ -328,7 +334,3 @@ def get_soundcloud_client_id() -> str:
             return match.group(1)
 
     raise RuntimeError("client_id not found")
-
-
-if __name__ == "__main__":
-    mcp.run()
