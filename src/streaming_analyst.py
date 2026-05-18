@@ -85,7 +85,6 @@ SOUNDCLOUD_BASE_V2 = "https://api-v2.soundcloud.com"
 
 SONGSTATS_API_KEY = os.environ["SONGSTATS_API_KEY"]
 SONGSTATS_BASE = "https://api.songstats.com/enterprise/v1"
-SONGSTATS_HEADERS = {"apikey": API_KEY, "Accept": "application/json"}
 
 
 # ==============================================================================
@@ -148,8 +147,8 @@ def get_track_daily_streams(
     }
 
     resp = requests.get(
-        f"{BASE_URL}/tracks/historic_stats",
-        headers=HEADERS,
+        f"{SONGSTATS_BASE}/tracks/historic_stats",
+        headers={"apikey": SONGSTATS_API_KEY, "Accept": "application/json"}
         params=params,
         timeout=30,
     )
