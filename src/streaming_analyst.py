@@ -9,6 +9,11 @@ about artists, tracks, and albums on various DSPs.
 File structure:
 
 * Spotify functions
+    * get_track_daily_streams
+        Return Daily streams and Total streams of a track in the range
+        start_date - end_date. This could be use for both history loading and
+        daily update of the history (using the date of yesterday as both
+        start_date and end_date).
     * get_popularity
         Return the popularity index. Useful to estimate the recent raising of
         popularity of an artist, track, or album.
@@ -78,6 +83,10 @@ LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/"
 SOUNDCLOUD_BASE = "https://api.soundcloud.com"
 SOUNDCLOUD_BASE_V2 = "https://api-v2.soundcloud.com"
 
+SONGSTATS_API_KEY = os.environ["SONGSTATS_API_KEY"]
+SONGSTATS_BASE = "https://api.songstats.com/enterprise/v1"
+SONGSTATS_HEADERS = {"apikey": API_KEY, "Accept": "application/json"}
+
 
 # ==============================================================================
 # AccessToken Class
@@ -112,6 +121,53 @@ token = AccessToken()
 # ==============================================================================
 # Spotify Functions
 # ==============================================================================
+def get_track_daily_streams(
+    spotify_track_id: str,
+    spotify_artist_id: str,
+    start_date: str,
+    end_date: str,
+    source: str = "spotify",
+) -> list[dict]:
+    """
+    Get daily stream counts for a track from Songstats.
+
+    :param spotify_track_id: Spotify track ID
+    :param spotify_artist_id: Spotify artist ID (required for Artist/Label API keys)
+    :param start_date: start of the time window (YYYY-MM-DD)
+    :param end_date: end of the time window (YYYY-MM-DD)
+    :param source: platform to query (default: 'spotify')
+    :returns: list of dicts with keys 'date', 'streams_daily', 'streams_total'
+    :raises requests.HTTPError: if the API call fails
+    """
+    params: dict = {
+        "source": source,
+        "start_date": start_date,
+        "end_date": end_date,
+        "spotify_track_id": spotify_track_id,
+        "spotify_artist_id": spotify_artist_id,
+    }
+
+    resp = requests.get(
+        f"{BASE_URL}/tracks/historic_stats",
+        headers=HEADERS,
+        params=params,
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    history = data["stats"][0]["data"]["history"]
+
+    return [
+        {
+            "date": entry["date"],
+            "streams_daily": entry.get("streams_daily"),
+            "streams_total": entry.get("streams_total"),
+        }
+        for entry in history
+    ]
+
+
 @mcp.tool()
 def get_popularity(query: str, kind: str) -> int:
     """
@@ -139,7 +195,7 @@ def get_popularity(query: str, kind: str) -> int:
     return r.json()["popularity"]
 
 
-def search_spotify_id(query: str, kind: str) -> str:
+def search_spotify_id(query: str, kind: str) -> tuple[str]:
     """
     Search for a track/artist/album by name and return its Spotify ID.
 
@@ -165,7 +221,7 @@ def search_spotify_id(query: str, kind: str) -> str:
     if not items:
         raise RuntimeError(f"No {kind} found for query '{query}'.")
 
-    return items[0]["id"]
+    return (items[0]["id"], items[0]["artists"][0]["id"])
 
 
 # ==============================================================================
