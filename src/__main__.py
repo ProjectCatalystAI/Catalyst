@@ -1,7 +1,5 @@
-def run() -> None:
-    pass
-
+import streaming_analyst
+from server import mcp
 
 if __name__ == "__main__":
-    run()
-
+    mcp.run()

@@ -60,7 +60,8 @@ from typing import Any
 
 import requests
 from dotenv import load_dotenv
-from fastmcp import FastMCP
+
+from server import mcp
 
 # ==============================================================================
 # Constants Loading
@@ -105,7 +106,6 @@ class AccessToken:
         return r.json()["access_token"]
 
 
-mcp = FastMCP("streaming-analyst")
 token = AccessToken()
 
 
@@ -334,19 +334,3 @@ def get_soundcloud_client_id() -> str:
             return match.group(1)
 
     raise RuntimeError("client_id not found")
-
-
-@mcp.tool()
-def days_until(target: str) -> int:
-    """
-    Calculate the number of days between today and a target date.
-    :param target: The target date in ISO format (YYYY-MM-DD).
-    :returns: The number of days until the target date.
-    """
-    target_date = date.fromisoformat(target)
-    delta = (target_date - date.today()).days
-    return delta
-
-
-if __name__ == "__main__":
-    mcp.run()
