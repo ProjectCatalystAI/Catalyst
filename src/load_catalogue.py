@@ -366,9 +366,9 @@ def populate_track(
                 session.add(SpotifyTrackHistoric(
                     track_id=track.id,
                     date=parse_date(entry["date"]),
-                    streams=entry.get("streams_daily"),
-                    popularity=None,
-                    playlists_current=None,
+                    streams=entry.get("streams"),
+                    popularity=entry.get("popularity"),
+                    playlists_current=entry.get("playlists_current"),
                 ))
     except Exception as e:
         log.warning("Spotify track historic failed for '%s': %s", title, e)

@@ -216,7 +216,8 @@ def get_track_daily_streams(
     :param start_date: start of the time window (YYYY-MM-DD)
     :param end_date: end of the time window (YYYY-MM-DD)
     :param source: platform to query (default: 'spotify')
-    :returns: list of dicts with keys 'date', 'streams_daily', 'streams_total'
+    :returns: list of dicts with keys 'date', 'streams', 'popularity',
+              'playlists_current'
     :raises requests.HTTPError: if the API call fails
     """
     params: dict = {
@@ -241,8 +242,9 @@ def get_track_daily_streams(
     return [
         {
             "date": entry["date"],
-            "streams_daily": entry.get("streams_daily"),
-            "streams_total": entry.get("streams_total"),
+            "streams": entry.get("streams_total"),
+            "popularity": entry.get("popularity_current"),
+            "playlists_current": entry.get("playlists_current"),
         }
         for entry in history
     ]
@@ -1032,7 +1034,7 @@ def get_youtube_track_stats(
         {
             "views": v.get("view_count"),
             "likes": v.get("like_count"),
-            "dislikes": v.get("dislike_count"),
+            "dislikes": v.get("dislikes_total"),
             "comments": v.get("comment_count"),
             "record_date": v.get("record_date"),
             "title": v.get("title"),
