@@ -8,17 +8,72 @@ about artists, tracks, and albums on various DSPs.
 
 File structure:
 
+* Songstats helpers (private)
+    * _songstats_get
+        Base GET wrapper that injects auth headers and the base URL.
+    * _songstats_source_data
+        Calls _songstats_get and extracts the data dict for a given source from
+        the stats envelope.
+
 * Spotify functions
+    * get_spotify_track_stats
+        Return current Spotify stats for a track: streams, popularity,
+        playlists_current, playlists_total.
     * get_track_daily_streams
         Return Daily streams and Total streams of a track in the range
         start_date - end_date. This could be use for both history loading and
         daily update of the history (using the date of yesterday as both
         start_date and end_date).
+    * get_spotify_artist_stats
+        Return current Spotify stats for an artist: monthly_listeners,
+        followers_total, streams, popularity_current.
+    * get_spotify_artist_historic
+        Return a list of historic daily snapshots for an artist on Spotify.
     * get_popularity
         Return the popularity index. Useful to estimate the recent raising of
         popularity of an artist, track, or album.
     * search_spotify_id
         Auxiliary function for the previous one that searches for a query.
+
+* Instagram functions
+    * get_instagram_artist_stats
+        Return current Instagram stats for an artist.
+    * get_instagram_artist_historic
+        Return historic Instagram snapshots for an artist.
+    * get_instagram_track_stats
+        Return current Instagram stats for a track, including top videos.
+    * get_instagram_track_historic
+        Return historic Instagram snapshots for a track.
+
+* TikTok functions
+    * get_tiktok_artist_stats
+        Return current TikTok stats for an artist.
+    * get_tiktok_artist_historic
+        Return historic TikTok snapshots for an artist.
+    * get_tiktok_track_stats
+        Return current TikTok stats for a track, including top videos.
+    * get_tiktok_track_historic
+        Return historic TikTok snapshots for a track.
+
+* YouTube functions
+    * get_youtube_artist_stats
+        Return current YouTube stats for an artist.
+    * get_youtube_artist_historic
+        Return historic YouTube snapshots for an artist.
+    * get_youtube_track_stats
+        Return current YouTube stats for a track, including top videos and
+        top shorts.
+    * get_youtube_track_historic
+        Return historic YouTube snapshots for a track.
+
+* Track metadata functions
+    * get_track_isrc
+        Return the ISRC of a track using the Spotify API.
+
+* MusicBrainz functions
+    * get_artist_bio_and_country
+        Return the country of origin and a Wikipedia biography excerpt for an
+        artist, sourced from MusicBrainz and the Wikipedia REST API.
 
 * Last.FM functions
     * get_lastfm_info
@@ -38,12 +93,6 @@ File structure:
         called by an agent, it's not a big deal, and there are not other viable
         alternatives as far as I know.
 
-* Utils
-    * days_until
-        To calculate the number of days between today and a birthday or
-        anniversary.
-
-TODO: YouTube functions.
 TODO: If we want to monitor specific artists, tracks, or albums, we could let
       the agent execute these functions periodically (e.g., once a day) to save
       the relevant data into a CSV. It would help to understand how much an
@@ -120,6 +169,38 @@ token = AccessToken()
 # ==============================================================================
 # Spotify Functions
 # ==============================================================================
+def get_spotify_track_stats(
+    isrc: str, spotify_track_id: str, spotify_artist_id: str
+) -> dict:
+    """
+    Get current Spotify stats for a track from Songstats.
+
+    :param isrc: ISRC code of the track
+    :param spotify_track_id: Spotify track ID
+    :param spotify_artist_id: Spotify artist ID (required for Artist/Label API
+                              keys)
+    :returns: dict with keys 'streams', 'popularity', 'playlists_current',
+              'playlists_total'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "tracks/stats",
+        {
+            "isrc": isrc,
+            "spotify_track_id": spotify_track_id,
+            "spotify_artist_id": spotify_artist_id,
+            "offset": 0,
+        },
+        "spotify",
+    )
+    return {
+        "streams": data.get("streams_total"),
+        "popularity": data.get("popularity_current"),
+        "playlists_current": data.get("playlists_editorial_current"),
+        "playlists_total": data.get("playlists_editorial_total"),
+    }
+
+
 def get_track_daily_streams(
     spotify_track_id: str,
     spotify_artist_id: str,
@@ -148,7 +229,7 @@ def get_track_daily_streams(
 
     resp = requests.get(
         f"{SONGSTATS_BASE}/tracks/historic_stats",
-        headers={"apikey": SONGSTATS_API_KEY, "Accept": "application/json"}
+        headers={"apikey": SONGSTATS_API_KEY, "Accept": "application/json"},
         params=params,
         timeout=30,
     )
@@ -164,6 +245,150 @@ def get_track_daily_streams(
             "streams_total": entry.get("streams_total"),
         }
         for entry in history
+    ]
+
+
+# ==============================================================================
+# Songstats Helpers
+# ==============================================================================
+def _songstats_get(endpoint: str, params: dict) -> dict:
+    """
+    Base GET wrapper for the Songstats Enterprise API.
+
+    :param endpoint: path relative to SONGSTATS_BASE (e.g. 'artists/stats')
+    :param params: query parameters to include in the request
+    :returns: parsed JSON response
+    :raises requests.HTTPError: if the API call fails
+    """
+    resp = requests.get(
+        f"{SONGSTATS_BASE}/{endpoint}",
+        headers={"apikey": SONGSTATS_API_KEY, "Accept": "application/json"},
+        params=params,
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _songstats_source_data(endpoint: str, params: dict, source: str) -> dict:
+    """
+    Call Songstats and extract the data dict for a specific source from the
+    stats envelope.
+
+    :param endpoint: path relative to SONGSTATS_BASE
+    :param params: query parameters (without 'source', which is injected here)
+    :param source: platform name (e.g. 'spotify', 'instagram', 'tiktok',
+                   'youtube')
+    :returns: the 'data' dict for the matching source entry, or {} if not found
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_get(endpoint, {**params, "source": source})
+    for entry in data.get("stats", []):
+        if entry.get("source") == source:
+            return entry.get("data", {})
+    return {}
+
+
+def _songstats_track_stats_paginated(
+    params: dict, source: str, *video_keys: str
+) -> tuple[dict, dict[str, list]]:
+    """
+    Fetch tracks/stats with video pagination for a given source.
+
+    Starts at offset=0 and increments by 100 until no new items are found in
+    any of the requested video_keys.
+
+    :param params: base query params (isrc, spotify_track_id, spotify_artist_id)
+    :param source: platform name ('youtube', 'tiktok', 'instagram')
+    :param video_keys: keys inside 'data' that hold video lists (e.g. 'videos',
+                       'shorts')
+    :returns: (aggregate_data_dict, {key: [all_items]})
+    :raises requests.HTTPError: if any API call fails
+    """
+    base = {**params, "source": source, "with_videos": "true", "limit": 100}
+
+    def _extract(resp: dict) -> dict:
+        for entry in resp.get("stats", []):
+            if entry.get("source") == source:
+                return entry.get("data", {})
+        return {}
+
+    first_data = _extract(_songstats_get("tracks/stats", {**base, "offset": 0}))
+    all_items: dict[str, list] = {k: list(first_data.get(k, [])) for k in video_keys}
+
+    offset = 100
+    while True:
+        page_data = _extract(_songstats_get("tracks/stats", {**base, "offset": offset}))
+        found = False
+        for k in video_keys:
+            page = page_data.get(k, [])
+            if page:
+                all_items[k].extend(page)
+                found = True
+        if not found:
+            break
+        offset += 100
+
+    return first_data, all_items
+
+
+# ==============================================================================
+# Spotify Artist Functions
+# ==============================================================================
+def get_spotify_artist_stats(spotify_artist_id: str) -> dict:
+    """
+    Get current Spotify stats for an artist from Songstats.
+
+    :param spotify_artist_id: Spotify artist ID
+    :returns: dict with keys 'monthly_listeners', 'followers_total', 'streams',
+              'popularity_current'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "artists/stats",
+        {"spotify_artist_id": spotify_artist_id},
+        "spotify",
+    )
+    return {
+        "monthly_listeners": data.get("monthly_listeners_current"),
+        "followers_total": data.get("followers_total"),
+        "streams": data.get("streams_total"),
+        "popularity_current": data.get("popularity_current"),
+    }
+
+
+def get_spotify_artist_historic(
+    spotify_artist_id: str, start_date: str, end_date: str
+) -> list[dict]:
+    """
+    Get historic Spotify stats for an artist from Songstats.
+
+    :param spotify_artist_id: Spotify artist ID
+    :param start_date: start of the time window (YYYY-MM-DD)
+    :param end_date: end of the time window (YYYY-MM-DD)
+    :returns: list of dicts with keys 'date', 'popularity_current',
+              'followers_total', 'monthly_listeners', 'streams_total'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "artists/historic_stats",
+        {
+            "spotify_artist_id": spotify_artist_id,
+            "start_date": start_date,
+            "end_date": end_date,
+            "with_aggregates": "true",
+        },
+        "spotify",
+    )
+    return [
+        {
+            "date": entry.get("date"),
+            "popularity_current": entry.get("popularity_current"),
+            "followers_total": entry.get("followers_total"),
+            "monthly_listeners": entry.get("monthly_listeners_current"),
+            "streams_total": entry.get("streams_total"),
+        }
+        for entry in data.get("history", [])
     ]
 
 
@@ -389,3 +614,576 @@ def get_soundcloud_client_id() -> str:
             return match.group(1)
 
     raise RuntimeError("client_id not found")
+
+
+# ==============================================================================
+# Instagram Artist Functions
+# ==============================================================================
+def get_instagram_artist_stats(spotify_artist_id: str) -> dict:
+    """
+    Get current Instagram stats for an artist from Songstats.
+
+    :param spotify_artist_id: Spotify artist ID
+    :returns: dict with keys 'video_count', 'views', 'likes', 'comments',
+              'followers', 'video_reach', 'engagement'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "artists/stats",
+        {"spotify_artist_id": spotify_artist_id},
+        "instagram",
+    )
+    return {
+        "video_count": data.get("videos_total"),
+        "views": data.get("views_total"),
+        "likes": data.get("likes_total"),
+        "comments": data.get("comments_total"),
+        "followers": data.get("followers_total"),
+        "video_reach": data.get("video_reach_total"),
+        "engagement": data.get("engagement_rate_total"),
+    }
+
+
+def get_instagram_artist_historic(
+    spotify_artist_id: str, start_date: str, end_date: str
+) -> list[dict]:
+    """
+    Get historic Instagram stats for an artist from Songstats.
+
+    :param spotify_artist_id: Spotify artist ID
+    :param start_date: start of the time window (YYYY-MM-DD)
+    :param end_date: end of the time window (YYYY-MM-DD)
+    :returns: list of dicts with keys 'date', 'video_count', 'views', 'likes',
+              'comments', 'followers'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "artists/historic_stats",
+        {
+            "spotify_artist_id": spotify_artist_id,
+            "start_date": start_date,
+            "end_date": end_date,
+            "with_aggregates": "true",
+        },
+        "instagram",
+    )
+    return [
+        {
+            "date": entry.get("date"),
+            "video_count": entry.get("videos_total"),
+            "views": entry.get("views_total"),
+            "likes": entry.get("likes_total"),
+            "comments": entry.get("comments_total"),
+            "followers": entry.get("followers_total"),
+        }
+        for entry in data.get("history", [])
+    ]
+
+
+# ==============================================================================
+# Instagram Track Functions
+# ==============================================================================
+def get_instagram_track_stats(
+    isrc: str, spotify_track_id: str, spotify_artist_id: str
+) -> dict:
+    """
+    Get current Instagram stats for a track from Songstats, including all
+    videos (paginated in batches of 100).
+
+    :param isrc: ISRC code of the track
+    :param spotify_track_id: Spotify track ID
+    :param spotify_artist_id: Spotify artist ID (required for Artist/Label API
+                              keys)
+    :returns: dict with keys 'video_count', 'views', 'likes', 'comments',
+              'creator_reach', 'engagement', and 'videos' (list of dicts with
+              'upload_date', 'views', 'likes', 'comments', 'video_id',
+              'user_country', 'username', 'user_handle', 'user_followers')
+    :raises requests.HTTPError: if the API call fails
+    """
+    data, items = _songstats_track_stats_paginated(
+        {"isrc": isrc, "spotify_track_id": spotify_track_id, "spotify_artist_id": spotify_artist_id},
+        "instagram",
+        "videos",
+    )
+    videos = [
+        {
+            "upload_date": v.get("upload_date"),
+            "views": v.get("views_total"),
+            "likes": v.get("likes_total"),
+            "comments": v.get("comments_total"),
+            "video_id": v.get("instagram_video_id"),
+            "user_country": v.get("instagram_user_country"),
+            "username": v.get("instagram_user_handle"),
+            "user_followers": v.get("instagram_user_followers"),
+        }
+        for v in items["videos"]
+    ]
+    return {
+        "video_count": data.get("videos_total"),
+        "views": data.get("views_total"),
+        "likes": data.get("likes_total"),
+        "comments": data.get("comments_total"),
+        "creator_reach": data.get("creator_reach_total"),
+        "engagement": data.get("engagement_rate_total"),
+        "videos": videos,
+    }
+
+
+def get_instagram_track_historic(
+    isrc: str, spotify_track_id: str, spotify_artist_id: str, start_date: str, end_date: str
+) -> list[dict]:
+    """
+    Get historic Instagram stats for a track from Songstats.
+
+    :param isrc: ISRC code of the track
+    :param spotify_track_id: Spotify track ID
+    :param spotify_artist_id: Spotify artist ID (required for Artist/Label API
+                              keys)
+    :param start_date: start of the time window (YYYY-MM-DD)
+    :param end_date: end of the time window (YYYY-MM-DD)
+    :returns: list of dicts with keys 'date', 'video_count', 'views', 'likes',
+              'comments'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "tracks/historic_stats",
+        {
+            "isrc": isrc,
+            "spotify_track_id": spotify_track_id,
+            "spotify_artist_id": spotify_artist_id,
+            "start_date": start_date,
+            "end_date": end_date,
+        },
+        "instagram",
+    )
+    return [
+        {
+            "date": entry.get("date"),
+            "video_count": entry.get("videos_total"),
+            "views": entry.get("views_total"),
+            "likes": entry.get("likes_total"),
+            "comments": entry.get("comments_total"),
+        }
+        for entry in data.get("history", [])
+    ]
+
+
+# ==============================================================================
+# TikTok Artist Functions
+# ==============================================================================
+def get_tiktok_artist_stats(spotify_artist_id: str) -> dict:
+    """
+    Get current TikTok stats for an artist from Songstats.
+
+    :param spotify_artist_id: Spotify artist ID
+    :returns: dict with keys 'video_count', 'views', 'likes', 'shares',
+              'comments', 'followers', 'profile_likes', 'video_reach',
+              'engagement'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "artists/stats",
+        {"spotify_artist_id": spotify_artist_id},
+        "tiktok",
+    )
+    return {
+        "video_count": data.get("videos_total"),
+        "views": data.get("views_total"),
+        "likes": data.get("likes_total"),
+        "shares": data.get("shares_total"),
+        "comments": data.get("comments_total"),
+        "followers": data.get("followers_total"),
+        "profile_likes": data.get("profile_likes_total"),
+        "video_reach": data.get("video_reach_total"),
+        "engagement": data.get("engagement_rate_total"),
+    }
+
+
+def get_tiktok_artist_historic(
+    spotify_artist_id: str, start_date: str, end_date: str
+) -> list[dict]:
+    """
+    Get historic TikTok stats for an artist from Songstats.
+
+    :param spotify_artist_id: Spotify artist ID
+    :param start_date: start of the time window (YYYY-MM-DD)
+    :param end_date: end of the time window (YYYY-MM-DD)
+    :returns: list of dicts with keys 'date', 'video_count', 'views', 'likes',
+              'shares', 'comments', 'followers', 'profile_likes'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "artists/historic_stats",
+        {
+            "spotify_artist_id": spotify_artist_id,
+            "start_date": start_date,
+            "end_date": end_date,
+            "with_aggregates": "true",
+        },
+        "tiktok",
+    )
+    return [
+        {
+            "date": entry.get("date"),
+            "video_count": entry.get("videos_total"),
+            "views": entry.get("views_total"),
+            "likes": entry.get("likes_total"),
+            "shares": entry.get("shares_total"),
+            "comments": entry.get("comments_total"),
+            "followers": entry.get("followers_total"),
+            "profile_likes": entry.get("profile_likes_total"),
+        }
+        for entry in data.get("history", [])
+    ]
+
+
+# ==============================================================================
+# TikTok Track Functions
+# ==============================================================================
+def get_tiktok_track_stats(
+    isrc: str, spotify_track_id: str, spotify_artist_id: str
+) -> dict:
+    """
+    Get current TikTok stats for a track from Songstats, including all videos
+    (paginated in batches of 100).
+
+    :param isrc: ISRC code of the track
+    :param spotify_track_id: Spotify track ID
+    :param spotify_artist_id: Spotify artist ID (required for Artist/Label API
+                              keys)
+    :returns: dict with keys 'video_count', 'views', 'likes', 'shares',
+              'comments', 'creator_reach', 'engagement', and 'videos' (list of
+              dicts with 'upload_date', 'views', 'likes', 'comments', 'shares',
+              'video_id', 'user_country', 'username', 'user_handle',
+              'user_followers')
+    :raises requests.HTTPError: if the API call fails
+    """
+    data, items = _songstats_track_stats_paginated(
+        {"isrc": isrc, "spotify_track_id": spotify_track_id, "spotify_artist_id": spotify_artist_id},
+        "tiktok",
+        "videos",
+    )
+    videos = [
+        {
+            "upload_date": v.get("upload_date"),
+            "views": v.get("views_total"),
+            "likes": v.get("likes_total"),
+            "comments": v.get("comments_total"),
+            "shares": v.get("shares_total"),
+            "video_id": v.get("tiktok_video_id"),
+            "user_country": v.get("tiktok_user_country"),
+            "username": v.get("tiktok_user_handle"),
+            "user_followers": v.get("tiktok_user_followers"),
+        }
+        for v in items["videos"]
+    ]
+    return {
+        "video_count": data.get("videos_total"),
+        "views": data.get("views_total"),
+        "likes": data.get("likes_total"),
+        "shares": data.get("shares_total"),
+        "comments": data.get("comments_total"),
+        "creator_reach": data.get("creator_reach_total"),
+        "engagement": data.get("engagement_rate_total"),
+        "videos": videos,
+    }
+
+
+def get_tiktok_track_historic(
+    isrc: str, spotify_track_id: str, spotify_artist_id: str, start_date: str, end_date: str
+) -> list[dict]:
+    """
+    Get historic TikTok stats for a track from Songstats.
+
+    :param isrc: ISRC code of the track
+    :param spotify_track_id: Spotify track ID
+    :param spotify_artist_id: Spotify artist ID (required for Artist/Label API
+                              keys)
+    :param start_date: start of the time window (YYYY-MM-DD)
+    :param end_date: end of the time window (YYYY-MM-DD)
+    :returns: list of dicts with keys 'date', 'video_count', 'views', 'likes',
+              'shares', 'comments'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "tracks/historic_stats",
+        {
+            "isrc": isrc,
+            "spotify_track_id": spotify_track_id,
+            "spotify_artist_id": spotify_artist_id,
+            "start_date": start_date,
+            "end_date": end_date,
+        },
+        "tiktok",
+    )
+    return [
+        {
+            "date": entry.get("date"),
+            "video_count": entry.get("videos_total"),
+            "views": entry.get("views_total"),
+            "likes": entry.get("likes_total"),
+            "shares": entry.get("shares_total"),
+            "comments": entry.get("comments_total"),
+        }
+        for entry in data.get("history", [])
+    ]
+
+
+# ==============================================================================
+# YouTube Artist Functions
+# ==============================================================================
+def get_youtube_artist_stats(spotify_artist_id: str) -> dict:
+    """
+    Get current YouTube stats for an artist from Songstats.
+
+    :param spotify_artist_id: Spotify artist ID
+    :returns: dict with keys 'subscribers', 'channel_views', 'engagement',
+              'video_count', 'video_views', 'video_likes', 'video_comments',
+              'video_reach', 'shorts_count', 'shorts_views', 'shorts_likes',
+              'shorts_comments'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "artists/stats",
+        {"spotify_artist_id": spotify_artist_id},
+        "youtube",
+    )
+    return {
+        "subscribers": data.get("subscribers_total"),
+        "channel_views": data.get("channel_views_total"),
+        "engagement": data.get("engagement_rate_total"),
+        "video_count": data.get("videos_total"),
+        "video_views": data.get("video_views_total"),
+        "video_likes": data.get("video_likes_total"),
+        "video_comments": data.get("video_comments_total"),
+        "video_reach": data.get("video_reach_total"),
+        "shorts_count": data.get("shorts_total"),
+        "shorts_views": data.get("short_views_total"),
+        "shorts_likes": data.get("short_likes_total"),
+        "shorts_comments": data.get("short_comments_total"),
+    }
+
+
+def get_youtube_artist_historic(
+    spotify_artist_id: str, start_date: str, end_date: str
+) -> list[dict]:
+    """
+    Get historic YouTube stats for an artist from Songstats.
+
+    :param spotify_artist_id: Spotify artist ID
+    :param start_date: start of the time window (YYYY-MM-DD)
+    :param end_date: end of the time window (YYYY-MM-DD)
+    :returns: list of dicts with keys 'date', 'subscribers', 'views', 'likes',
+              'comments'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "artists/historic_stats",
+        {
+            "spotify_artist_id": spotify_artist_id,
+            "start_date": start_date,
+            "end_date": end_date,
+            "with_aggregates": "true",
+        },
+        "youtube",
+    )
+    return [
+        {
+            "date": entry.get("date"),
+            "subscribers": entry.get("subscribers_total"),
+            "views": entry.get("video_views_total"),
+            "likes": entry.get("video_likes_total"),
+            "comments": entry.get("video_comments_total"),
+        }
+        for entry in data.get("history", [])
+    ]
+
+
+# ==============================================================================
+# YouTube Track Functions
+# ==============================================================================
+def get_youtube_track_stats(
+    isrc: str, spotify_track_id: str, spotify_artist_id: str
+) -> dict:
+    """
+    Get current YouTube stats for a track from Songstats, including all videos
+    and shorts (paginated in batches of 100).
+
+    :param isrc: ISRC code of the track
+    :param spotify_track_id: Spotify track ID
+    :param spotify_artist_id: Spotify artist ID (required for Artist/Label API
+                              keys)
+    :returns: dict with keys 'video_count', 'video_views', 'video_likes',
+              'video_comments', 'shorts_count', 'shorts_views', 'shorts_likes',
+              'shorts_comments', 'creator_reach', 'engagement', 'videos' (list
+              of dicts with 'views', 'likes', 'dislikes', 'comments',
+              'record_date', 'title', 'external_id', 'upload_date'), and
+              'shorts' (list of dicts with 'views', 'likes', 'comments',
+              'title', 'external_id', 'upload_date')
+    :raises requests.HTTPError: if the API call fails
+    """
+    data, items = _songstats_track_stats_paginated(
+        {"isrc": isrc, "spotify_track_id": spotify_track_id, "spotify_artist_id": spotify_artist_id},
+        "youtube",
+        "videos",
+        "shorts",
+    )
+    videos = [
+        {
+            "views": v.get("view_count"),
+            "likes": v.get("like_count"),
+            "dislikes": v.get("dislike_count"),
+            "comments": v.get("comment_count"),
+            "record_date": v.get("record_date"),
+            "title": v.get("title"),
+            "external_id": v.get("external_id"),
+            "upload_date": v.get("upload_date"),
+        }
+        for v in items["videos"]
+    ]
+    shorts = [
+        {
+            "views": s.get("view_count"),
+            "likes": s.get("like_count"),
+            "comments": s.get("comment_count"),
+            "title": s.get("title"),
+            "external_id": s.get("external_id"),
+            "upload_date": s.get("upload_date"),
+        }
+        for s in items["shorts"]
+    ]
+    return {
+        "video_count": data.get("videos_total"),
+        "video_views": data.get("video_views_total"),
+        "video_likes": data.get("video_likes_total"),
+        "video_comments": data.get("video_comments_total"),
+        "shorts_count": data.get("shorts_total"),
+        "shorts_views": data.get("short_views_total"),
+        "shorts_likes": data.get("short_likes_total"),
+        "shorts_comments": data.get("short_comments_total"),
+        "creator_reach": data.get("creator_reach_total"),
+        "engagement": data.get("engagement_rate_total"),
+        "videos": videos,
+        "shorts": shorts,
+    }
+
+
+def get_youtube_track_historic(
+    isrc: str, spotify_track_id: str, spotify_artist_id: str, start_date: str, end_date: str
+) -> list[dict]:
+    """
+    Get historic YouTube stats for a track from Songstats.
+
+    :param isrc: ISRC code of the track
+    :param spotify_track_id: Spotify track ID
+    :param spotify_artist_id: Spotify artist ID (required for Artist/Label API
+                              keys)
+    :param start_date: start of the time window (YYYY-MM-DD)
+    :param end_date: end of the time window (YYYY-MM-DD)
+    :returns: list of dicts with keys 'date', 'views', 'likes', 'comments',
+              'shorts_count'
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_source_data(
+        "tracks/historic_stats",
+        {
+            "isrc": isrc,
+            "spotify_track_id": spotify_track_id,
+            "spotify_artist_id": spotify_artist_id,
+            "start_date": start_date,
+            "end_date": end_date,
+        },
+        "youtube",
+    )
+    return [
+        {
+            "date": entry.get("date"),
+            "views": entry.get("video_views_total"),
+            "likes": entry.get("video_likes_total"),
+            "comments": entry.get("video_comments_total"),
+            "shorts_count": entry.get("shorts_total"),
+        }
+        for entry in data.get("history", [])
+    ]
+
+
+# ==============================================================================
+# Track Metadata Functions
+# ==============================================================================
+def get_track_isrc(spotify_track_id: str) -> str | None:
+    """
+    Get the ISRC of a track from the Spotify API.
+
+    :param spotify_track_id: Spotify track ID
+    :returns: ISRC string (e.g. 'USRC17607839'), or None if not available
+    :raises requests.HTTPError: if the API call fails
+    """
+    access_token = token.get()
+    r = requests.get(
+        f"https://api.spotify.com/v1/tracks/{spotify_track_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json().get("external_ids", {}).get("isrc")
+
+
+# ==============================================================================
+# MusicBrainz Functions
+# ==============================================================================
+_MUSICBRAINZ_BASE = "https://musicbrainz.org/ws/2"
+_MUSICBRAINZ_UA = "Catalyst/1.0 (alessiocelentano2003@gmail.com)"
+
+
+def get_artist_bio_and_country(artist_name: str) -> dict:
+    """
+    Fetch the country of origin and a short biography for an artist.
+
+    Uses MusicBrainz to look up the artist and obtain their country and MBID,
+    then follows the Wikipedia URL relation (if present) to fetch a biography
+    excerpt from the Wikipedia REST summary API.
+
+    :param artist_name: artist name to search for
+    :returns: dict with keys 'country' (ISO 3166-1 alpha-2 code or None) and
+              'bio' (plain-text Wikipedia extract or None)
+    :raises requests.HTTPError: if any API call fails
+    """
+    r = requests.get(
+        f"{_MUSICBRAINZ_BASE}/artist/",
+        params={"query": f"artist:{artist_name}", "fmt": "json", "limit": 1},
+        headers={"User-Agent": _MUSICBRAINZ_UA},
+        timeout=15,
+    )
+    r.raise_for_status()
+    artists = r.json().get("artists", [])
+    if not artists:
+        return {"country": None, "bio": None}
+
+    artist = artists[0]
+    country = artist.get("country")
+    mbid = artist.get("id")
+
+    time.sleep(1)
+    r = requests.get(
+        f"{_MUSICBRAINZ_BASE}/artist/{mbid}",
+        params={"inc": "url-rels", "fmt": "json"},
+        headers={"User-Agent": _MUSICBRAINZ_UA},
+        timeout=15,
+    )
+    r.raise_for_status()
+
+    bio = None
+    for rel in r.json().get("relations", []):
+        if rel.get("type") in ("wikipedia", "wikidata"):
+            url = rel.get("url", {}).get("resource", "")
+            title = url.rstrip("/").split("/")[-1]
+            time.sleep(0.5)
+            wiki_r = requests.get(
+                f"https://en.wikipedia.org/api/rest_v1/page/summary/{title}",
+                timeout=15,
+            )
+            if wiki_r.ok:
+                bio = wiki_r.json().get("extract")
+            break
+
+    return {"country": country, "bio": bio}
