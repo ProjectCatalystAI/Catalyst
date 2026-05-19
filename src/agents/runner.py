@@ -237,7 +237,13 @@ def _run_youtube_shorts(track_id: int) -> str:
 
 
 def _run_period_track(track_id: int) -> str:
-    return _run(period_track_analyzer(), track_id)
+    text = _run(period_track_analyzer(), track_id)
+    with _db.session() as s:
+        row = s.query(Track).filter_by(id=track_id).one_or_none()
+        if row is not None:
+            row.analysis = text
+            s.commit()
+    return text
 
 
 def _run_track_summarizer(track_id: int) -> str:

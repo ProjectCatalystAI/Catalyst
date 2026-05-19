@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Catalyst</title>
+<meta name="viewport" content="width=1440" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg:    '#0A0A0A',
+          bg2:   '#111111',
+          bg3:   '#161616',
+          line:  '#1f1f1f',
+          line2: '#2a2a2a',
+          mute:  '#8a8a8a',
+          mute2: '#5e5e5e',
+          fg:    '#f4f4f4',
+          cyan:  '#00E5FF',
+        },
+        fontFamily: {
+          sans: ['Manrope', 'system-ui', 'sans-serif'],
+          mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+        },
+        letterSpacing: {
+          tightish: '-0.015em',
+          tighter2: '-0.025em',
+        }
+      }
+    }
+  };
+</script>
+<link rel="stylesheet" href="styles-prototype.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body class="min-h-screen">
+<div id="root"></div>
+
+<script src="screens/flow/data.js"></script>
+
+<script type="text/babel" src="screens/prototype/icons.jsx"></script>
+<script type="text/babel" src="screens/prototype/sidebar.jsx"></script>
+<script type="text/babel" src="screens/prototype/empty.jsx"></script>
+<script type="text/babel" src="screens/prototype/upload.jsx"></script>
+<script type="text/babel" src="screens/prototype/reading.jsx"></script>
+<script type="text/babel" src="screens/prototype/results.jsx"></script>
+<script type="text/babel" src="screens/prototype/app.jsx"></script>
+</body>
+</html>

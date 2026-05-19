@@ -29,7 +29,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from db import (
+from src.db import (
     Artist,
     Catalog,
     Database,
@@ -57,8 +57,8 @@ from db import (
     YoutubeTrackHistoric,
     YoutubeVideoTrack,
 )
-from utils import parse_date
-from streaming_analyst import (
+from src.utils import parse_date
+from src.streaming_analyst import (
     token as _spotify_token,
     get_artist_bio_and_country,
     get_instagram_artist_historic,

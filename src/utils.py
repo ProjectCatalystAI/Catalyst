@@ -29,10 +29,19 @@ def days_until(target: str) -> int:
 
 def parse_date(value: str) -> date | None:
     """
-    Parse a date string in ISO format to a date object.
-    :param value: The date string in ISO format (YYYY-MM-DD).
-    :returns: A date object, or None if the value is empty.
+    Parse a date string to a date object.
+    :param value: Date string in YYYY-MM-DD, YYYY-MM, or YYYY format.
+    :returns: A date object, or None if the value is empty or unparseable.
     """
     if not value:
         return None
-    return date.fromisoformat(value.strip())
+    v = value.strip()
+    parts = v.split("-")
+    try:
+        if len(parts) == 1:
+            return date(int(parts[0]), 1, 1)
+        if len(parts) == 2:
+            return date(int(parts[0]), int(parts[1]), 1)
+        return date.fromisoformat(v)
+    except (ValueError, TypeError):
+        return None
