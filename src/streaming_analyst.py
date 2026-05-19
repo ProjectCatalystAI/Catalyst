@@ -1110,6 +1110,22 @@ def get_youtube_track_historic(
 # ==============================================================================
 # Track Metadata Functions
 # ==============================================================================
+def get_track_genres(isrc: str, spotify_track_id: str) -> list[str]:
+    """
+    Get genres for a track from Songstats track info.
+
+    :param isrc: ISRC code of the track
+    :param spotify_track_id: Spotify track ID
+    :returns: list of genre name strings (may be empty)
+    :raises requests.HTTPError: if the API call fails
+    """
+    data = _songstats_get(
+        "tracks/info",
+        {"isrc": isrc, "spotify_track_id": spotify_track_id},
+    )
+    return data.get("track_info", {}).get("genres", [])
+
+
 def get_track_isrc(spotify_track_id: str) -> str | None:
     """
     Get the ISRC of a track from the Spotify API.
