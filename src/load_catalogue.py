@@ -73,6 +73,7 @@ from streaming_analyst import (
     get_tiktok_track_historic,
     get_tiktok_track_stats,
     get_track_daily_streams,
+    get_track_genres,
     get_track_isrc,
     get_youtube_artist_historic,
     get_youtube_artist_stats,
@@ -344,6 +345,17 @@ def populate_track(
 
     try:
         with session.begin_nested():
+            existing_genre_ids = {tg.genre_id for tg in session.query(TrackGenre).filter_by(track_id=track.id)}
+            for name in get_track_genres(isrc, track_sid):
+                genre = get_or_create_genre(session, name)
+                if genre.id not in existing_genre_ids:
+                    session.add(TrackGenre(track_id=track.id, genre_id=genre.id))
+                    existing_genre_ids.add(genre.id)
+    except Exception as e:
+        log.warning("Track genres failed for '%s': %s", title, e)
+
+    try:
+        with session.begin_nested():
             session.add(SpotifyTrack(track_id=track.id, **get_spotify_track_stats(isrc, track_sid, artist_sid)))
     except Exception as e:
         log.warning("Spotify track stats failed for '%s': %s", title, e)
@@ -354,9 +366,9 @@ def populate_track(
                 session.add(SpotifyTrackHistoric(
                     track_id=track.id,
                     date=parse_date(entry["date"]),
-                    streams=entry.get("streams_daily"),
-                    popularity=None,
-                    playlists_current=None,
+                    streams=entry.get("streams"),
+                    popularity=entry.get("popularity"),
+                    playlists_current=entry.get("playlists_current"),
                 ))
     except Exception as e:
         log.warning("Spotify track historic failed for '%s': %s", title, e)
