@@ -1,0 +1,15 @@
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.venv
+**/dist
+**/.DS_Store
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.claude
+.idea
+.vscode
+*.log
