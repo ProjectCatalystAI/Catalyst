@@ -1,8 +1,10 @@
-/* global React */
-const { useState: useStateRd, useEffect: useEffectRd } = React;
+import { useEffect, useState } from 'react';
+
+import { fetchStatus } from '../api/catalogues';
+import type { Catalogue } from '../types';
 
 // Generated from the actual agent registry in runner.py
-const AGENT_SEQUENCE = [
+const AGENT_SEQUENCE: ReadonlyArray<readonly [string, string]> = [
   ["loader",                  "Loading catalogue · {n} rows"],
   ["resolver",                "Resolving ISRCs · matched {nm} of {n}"],
   ["rights_check",            "Rights check · {n} / {n} clean"],
@@ -28,12 +30,11 @@ const AGENT_SEQUENCE = [
   ["rank_and_flag",           "Ranking · flagging top tracks"],
 ];
 
-// Map agent name → index in AGENT_SEQUENCE for step highlighting
-const AGENT_TO_STEP = {};
+const AGENT_TO_STEP: Record<string, number> = {};
 AGENT_SEQUENCE.forEach(([name], idx) => { AGENT_TO_STEP[name] = idx; });
 
-function pad2(n) { return n < 10 ? "0" + n : "" + n; }
-function fmtTs(secondsOffset) {
+function pad2(n: number): string { return n < 10 ? "0" + n : "" + n; }
+function fmtTs(secondsOffset: number): string {
   const total = 6 * 3600 + 42 * 60 + 8 + Math.floor(secondsOffset);
   const h = Math.floor(total / 3600) % 24;
   const m = Math.floor(total / 60) % 60;
@@ -41,9 +42,14 @@ function fmtTs(secondsOffset) {
   return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
 }
 
-function Reading({ catalogue, onDone }) {
-  const [step, setStep] = useStateRd(0);
-  const [pct, setPct] = useStateRd(0);
+interface ReadingProps {
+  catalogue: Catalogue | null;
+  onDone: () => void;
+}
+
+export default function Reading({ catalogue, onDone }: ReadingProps) {
+  const [step, setStep] = useState(0);
+  const [pct, setPct] = useState(0);
   const total = AGENT_SEQUENCE.length;
   const n = catalogue ? catalogue.tracks : 0;
   const nm = Math.max(0, n - 4);
@@ -51,9 +57,8 @@ function Reading({ catalogue, onDone }) {
   // If catalogue.id is a real backend integer, poll status; otherwise fall back to timer
   const backendId = catalogue && typeof catalogue.id === "number" ? catalogue.id : null;
 
-  useEffectRd(() => {
+  useEffect(() => {
     if (backendId == null) {
-      // Demo fallback: timer-driven progression
       const duration = 5400;
       const tickMs = duration / total;
       if (step >= total) {
@@ -65,16 +70,14 @@ function Reading({ catalogue, onDone }) {
     }
   }, [backendId, step, total, onDone]);
 
-  useEffectRd(() => {
+  useEffect(() => {
     if (backendId == null) return;
 
     let active = true;
 
     async function poll() {
       try {
-        const r = await fetch(`/api/catalogues/${backendId}/status`);
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        const data = await r.json();
+        const data = await fetchStatus(backendId!);
 
         if (!active) return;
 
@@ -97,20 +100,20 @@ function Reading({ catalogue, onDone }) {
         }
 
         if (active) setTimeout(poll, 2000);
-      } catch (_) {
+      } catch {
         if (active) setTimeout(poll, 3000);
       }
     }
 
     poll();
     return () => { active = false; };
-  }, [backendId]);
+  }, [backendId, total, onDone]);
 
   // For demo mode, pct is derived from step; for backend mode, pct comes from poll
   const displayPct = backendId != null ? pct : Math.min(100, Math.round((step / total) * 100));
 
   const etaSec = backendId != null
-    ? null  // backend doesn't expose ETA
+    ? null
     : Math.max(0, Math.round(((total - step) * (5400 / total)) / 1000));
   const etaText = displayPct >= 100 ? "—"
     : etaSec == null ? "In progress"
@@ -122,7 +125,7 @@ function Reading({ catalogue, onDone }) {
     let cls = "pending";
     if (idx < step) cls = "done";
     else if (idx === step) cls = "now";
-    const msg = row[1].replaceAll("{n}", n).replaceAll("{nm}", nm);
+    const msg = row[1].replaceAll("{n}", String(n)).replaceAll("{nm}", String(nm));
     return { idx, agent: row[0], msg, cls, ts: idx <= step ? fmtTs(idx * 2.4) : "—:—:—" };
   });
 
@@ -188,5 +191,3 @@ function Reading({ catalogue, onDone }) {
     </section>
   );
 }
-
-window.Reading = Reading;

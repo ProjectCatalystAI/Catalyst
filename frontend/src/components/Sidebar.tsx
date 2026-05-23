@@ -1,6 +1,16 @@
-/* global React, Wordmark */
+import { Wordmark } from '../icons';
+import type { Catalogue } from '../types';
 
-function PSidebar({ catalogues, activeId, onSelect, onAdd, processingId, processingPct }) {
+interface SidebarProps {
+  catalogues: Catalogue[];
+  activeId: number | string | null;
+  processingId: number | string | null;
+  processingPct: number;
+  onSelect: (id: number | string) => void;
+  onAdd: () => void;
+}
+
+export default function Sidebar({ catalogues, activeId, onSelect, onAdd, processingId, processingPct }: SidebarProps) {
   const hasCatalogues = catalogues.length > 0;
   const totalTracks = catalogues.reduce((sum, c) => sum + (c.tracks || 0), 0);
   const flaggedCount = hasCatalogues ? 14 : 0; // demo
@@ -101,5 +111,3 @@ function PSidebar({ catalogues, activeId, onSelect, onAdd, processingId, process
     </aside>
   );
 }
-
-window.PSidebar = PSidebar;

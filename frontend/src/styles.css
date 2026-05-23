@@ -1,4 +1,21 @@
-/* Catalyst Prototype — custom CSS on top of Tailwind CDN.
+@import "tailwindcss";
+
+@theme {
+  --color-bg:    #0A0A0A;
+  --color-bg2:   #111111;
+  --color-bg3:   #161616;
+  --color-line:  #1f1f1f;
+  --color-line2: #2a2a2a;
+  --color-mute:  #8a8a8a;
+  --color-mute2: #5e5e5e;
+  --color-fg:    #f4f4f4;
+  --color-cyan:  #00E5FF;
+
+  --font-sans: Manrope, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Catalyst Prototype — custom CSS on top of Tailwind.
    Mirrors Catalyst Product.html's visual system. */
 
 html, body { background: #0A0A0A; color: #f4f4f4; }

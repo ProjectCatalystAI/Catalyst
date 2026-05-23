@@ -430,6 +430,6 @@ def get_catalogue_results(catalogue_id: int) -> dict:
 
 
 # Serve the frontend — must come last so API routes take precedence
-_web_dir = Path(__file__).parent / "catalyst-web"
+_web_dir = Path(__file__).parent.parent / "frontend" / "dist"
 if _web_dir.is_dir():
     app.mount("/", StaticFiles(directory=_web_dir, html=True), name="static")

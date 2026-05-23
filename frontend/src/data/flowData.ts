@@ -1,5 +1,8 @@
 // Catalyst — flow data. Plausible fictional catalogues so the product feels real.
-window.FLOW_DATA = {
+// Only `FLOW_DATA.seasonal.tracks` is consumed today (by Results.tsx demo fallback);
+// the rest is preserved verbatim from the original data.js for future use.
+
+export const FLOW_DATA = {
   pm: "M. Okoye",
   org: "Concord · Catalogue, US",
   catalogues: [
@@ -41,7 +44,6 @@ window.FLOW_DATA = {
     }
   ],
 
-  // Seasonal moment results
   seasonal: {
     catalogue: "Italo Heritage, Vol. II",
     moment: "Spring · Northern Hemisphere",
@@ -69,7 +71,6 @@ window.FLOW_DATA = {
     ]
   },
 
-  // Social trend results
   social: {
     catalogue: "Italo Heritage, Vol. II",
     artists: [
@@ -81,7 +82,6 @@ window.FLOW_DATA = {
       { id: "armano",   name: "Renzo Armano",       lit: false, tracks: 6,  lifeyears: "1970 — 1983", flagged: 0 },
       { id: "ricci",    name: "Sergio Ricci & Lina", lit: false, tracks: 4, lifeyears: "1973 — 1979", flagged: 0 }
     ],
-    // Selected artist for the artist view
     selectedArtist: {
       id: "marini",
       name: "Loretta Marini",
@@ -111,7 +111,6 @@ window.FLOW_DATA = {
         { id: 18, title: "Lettera da Trento", year: 1989, lit: false }
       ]
     },
-    // Selected track view (drills into Maledetta Primavera)
     selectedTrack: {
       id: 1,
       title: "Maledetta Primavera",
@@ -157,4 +156,4 @@ window.FLOW_DATA = {
       }
     }
   }
-};
+} as const;

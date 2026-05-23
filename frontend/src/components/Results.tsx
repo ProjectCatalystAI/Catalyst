@@ -1,12 +1,29 @@
-/* global React, PlatformIndicator, PlatformIcon */
-const { useState: useStateRs, useEffect: useEffectRs } = React;
+import { useEffect, useState } from 'react';
 
-// Result row — collapsed
-function ResultRow({ track, lens, details, expanded, onClick }) {
+import { fetchResults } from '../api/catalogues';
+import { FLOW_DATA } from '../data/flowData';
+import { PlatformIcon, PlatformIndicator } from '../icons';
+import type { Catalogue, Lens, LensView, PlatformKey, Signals, Track } from '../types';
+
+const PLATFORM_ORDER: PlatformKey[] = ['spotify', 'instagram', 'tiktok', 'youtube'];
+
+const EMPTY_SIGNALS: Signals = { spotify: 0, instagram: 0, tiktok: 0, youtube: 0 };
+
+type DetailEntry = { seasonal: LensView; social: LensView };
+
+interface ResultRowProps {
+  track: Track;
+  lens: Lens;
+  details: Record<number, DetailEntry | undefined>;
+  expanded: boolean;
+  onClick: () => void;
+}
+
+function ResultRow({ track, lens, details, expanded, onClick }: ResultRowProps) {
   const det = details[track.id];
   const view = det ? det[lens] : null;
   const isHot = view ? view.hot : false;
-  const signals = view ? view.signals : { spotify: 0, instagram: 0, tiktok: 0, youtube: 0 };
+  const signals: Signals = view ? view.signals : EMPTY_SIGNALS;
   const synth = view ? view.synth : (track.lit ? "Flagged — reasoning not yet generated for this lens." : "Outside this lens.");
   const dim = !track.lit && !view;
 
@@ -36,7 +53,7 @@ function ResultRow({ track, lens, details, expanded, onClick }) {
           {synth}
         </div>
         <div className="flex items-center gap-2 justify-end">
-          {["spotify", "instagram", "tiktok", "youtube"].map(k => {
+          {PLATFORM_ORDER.map(k => {
             const v = signals[k] || 0;
             return (
               <PlatformIndicator key={k} kind={k} on={v > 0} pulse={v === 2} />
@@ -47,7 +64,6 @@ function ResultRow({ track, lens, details, expanded, onClick }) {
     );
   }
 
-  // Expanded row
   return (
     <div style={{ ...rowStyle, cursor: "default", display: "block", padding: 0, opacity: 1 }}>
       <div
@@ -64,7 +80,7 @@ function ResultRow({ track, lens, details, expanded, onClick }) {
         </div>
         <div className="text-[13px] leading-snug" style={{ color: isHot ? "#7fe7f5" : "#8a8a8a" }}>{synth}</div>
         <div className="flex items-center gap-2 justify-end">
-          {["spotify", "instagram", "tiktok", "youtube"].map(k => {
+          {PLATFORM_ORDER.map(k => {
             const v = signals[k] || 0;
             return <PlatformIndicator key={k} kind={k} on={v > 0} pulse={v === 2} />;
           })}
@@ -98,12 +114,12 @@ function ResultRow({ track, lens, details, expanded, onClick }) {
         <div className="rounded-md p-4" style={{ background: "#0A0A0A", border: "1px solid #1f1f1f" }}>
           <div className="mono text-[10px] uppercase mb-3" style={{ letterSpacing: "0.16em", color: "#5e5e5e" }}>Signal map</div>
           <div className="flex flex-col gap-2">
-            {[
+            {([
               ["spotify", "Spotify"],
               ["instagram", "Instagram"],
               ["tiktok", "TikTok"],
               ["youtube", "YouTube"],
-            ].map(([k, label]) => {
+            ] as Array<[PlatformKey, string]>).map(([k, label]) => {
               const v = signals[k] || 0;
               const dotColor = v === 2 ? "#00E5FF" : (v === 1 ? "#f4f4f4" : "#2a2a2a");
               const state = v === 2 ? "hot" : v === 1 ? "live" : "—";
@@ -129,39 +145,35 @@ function ResultRow({ track, lens, details, expanded, onClick }) {
   );
 }
 
-function Results({ catalogue }) {
-  const [lens, setLens] = useStateRs("seasonal");
-  const [openId, setOpenId] = useStateRs(null);
-  const [tracks, setTracks] = useStateRs([]);
-  const [details, setDetails] = useStateRs({});
-  const [loading, setLoading] = useStateRs(true);
+interface ResultsProps {
+  catalogue: Catalogue;
+}
+
+export default function Results({ catalogue }: ResultsProps) {
+  const [lens, setLens] = useState<Lens>("seasonal");
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [details, setDetails] = useState<Record<number, DetailEntry | undefined>>({});
+  const [loading, setLoading] = useState(true);
 
   const backendId = catalogue && typeof catalogue.id === "number" ? catalogue.id : null;
 
-  useEffectRs(() => {
+  useEffect(() => {
     if (backendId == null) {
-      // Fall back to demo data
-      const data = window.FLOW_DATA;
-      if (data) {
-        const demoTracks = data.seasonal.tracks;
-        setTracks(demoTracks);
-        // Demo details are already baked into the old FLOW_DATA structure;
-        // we leave details empty so the fallback synth message shows.
-      }
+      // Fall back to demo data — only seasonal.tracks is used; details stays empty
+      // so the fallback synth message shows.
+      const demoTracks = FLOW_DATA.seasonal.tracks as unknown as Track[];
+      setTracks(demoTracks);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    fetch(`/api/catalogues/${backendId}/results`)
-      .then(r => {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
+    fetchResults(backendId)
       .then(data => {
         const apiTracks = data.tracks || [];
         setTracks(apiTracks);
-        const map = {};
+        const map: Record<number, DetailEntry> = {};
         apiTracks.forEach(t => {
           map[t.id] = { seasonal: t.seasonal, social: t.social };
         });
@@ -258,9 +270,13 @@ function Results({ catalogue }) {
   );
 }
 
-function AnalyzerStrip({ catalogue }) {
+interface AnalyzerStripProps {
+  catalogue: Catalogue;
+}
+
+function AnalyzerStrip({ catalogue }: AnalyzerStripProps) {
   const n = catalogue ? catalogue.tracks : 0;
-  const cells = [
+  const cells: Array<{ kind: PlatformKey; title: string; sub: string; active: boolean }> = [
     { kind: "spotify",   title: "Spotify Analyzer",   sub: `Scanning ${n.toLocaleString()} tracks`, active: false },
     { kind: "instagram", title: "Instagram Analyzer", sub: "14 top videos analysed today", active: false },
     { kind: "tiktok",    title: "TikTok Analyzer",    sub: "Monitoring 12 trending sounds", active: true },
@@ -289,5 +305,3 @@ function AnalyzerStrip({ catalogue }) {
     </div>
   );
 }
-
-window.Results = Results;

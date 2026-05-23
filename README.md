@@ -75,7 +75,7 @@ The **period agent** maps each track against 9 cultural anchors (Valentine's Day
 | Database | SQLite via SQLAlchemy 2.0 |
 | Data | [Songstats](https://songstats.com) · Spotify API · Last.fm · SoundCloud · MusicBrainz |
 | Video | yt-dlp + ffmpeg |
-| Frontend | React 18 (UMD) · Tailwind CSS · Babel-standalone |
+| Frontend | React 18 + Vite · TypeScript · Tailwind CSS v4 |
 | Deployment | Railway |
 | License | Apache 2.0 |
 
@@ -117,11 +117,31 @@ cp .env.example .env
 
 ## Running
 
+### Production (one process)
+
+Build the frontend, then start the API — FastAPI serves both `/api/*` and the built assets from `/`.
+
 ```bash
+cd frontend && npm install && npm run build
+cd ..
 uvicorn src.api:app --reload
 ```
 
-The frontend is served statically at `/`. The API is available at `http://localhost:8000`.
+Open `http://localhost:8000`.
+
+### Development (two terminals, HMR)
+
+```bash
+# Terminal 1 — API
+uvicorn src.api:app --reload
+
+# Terminal 2 — Vite dev server with HMR; proxies /api → :8000
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`.
 
 ---
 
@@ -143,11 +163,6 @@ src/
 │   ├── period_track.py
 │   ├── track_summarizer.py
 │   └── ...                    # artist-level agents
-├── catalyst-web/              # React frontend
-│   ├── index.html
-│   ├── styles-prototype.css
-│   └── screens/
-│       └── prototype/         # Empty / Upload / Reading / Results screens
 ├── api.py                     # FastAPI app + job orchestration
 ├── db.py                      # SQLAlchemy models
 ├── load_catalogue.py          # CSV → DB ingestion pipeline
@@ -155,6 +170,21 @@ src/
 ├── import_catalogue.py        # CLI import tool
 ├── server.py                  # FastMCP setup
 └── __main__.py                # MCP entry point
+
+frontend/                      # Vite + React + TypeScript app
+├── index.html
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+└── src/
+    ├── main.tsx
+    ├── App.tsx
+    ├── styles.css
+    ├── types.ts
+    ├── icons.tsx
+    ├── api/catalogues.ts      # typed fetch helpers
+    ├── data/flowData.ts       # demo-mode fallback data
+    └── components/            # Sidebar / Empty / Upload / Reading / Results
 ```
 
 ---

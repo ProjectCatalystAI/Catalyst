@@ -1,7 +1,10 @@
-/* global React */
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+
+import type { PlatformKey } from './types';
 
 // Original monochrome platform glyphs — generic, not branded reproductions.
-const PLATFORM_ICONS = {
+const PLATFORM_ICONS: Record<PlatformKey, (s: number) => JSX.Element> = {
   spotify: (s) => (
     <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.6" />
@@ -29,27 +32,38 @@ const PLATFORM_ICONS = {
   ),
 };
 
-function PlatformIcon({ kind, size = 14 }) {
+interface PlatformIconProps {
+  kind: PlatformKey;
+  size?: number;
+}
+
+export function PlatformIcon({ kind, size = 14 }: PlatformIconProps) {
   const renderer = PLATFORM_ICONS[kind];
   if (!renderer) return null;
   return <span className="inline-flex items-center justify-center">{renderer(size)}</span>;
 }
 
+interface PlatformIndicatorProps {
+  kind: PlatformKey;
+  on?: boolean;
+  pulse?: boolean;
+}
+
 // Indicator pill (used on row right-edge to show platform signal state)
-function PlatformIndicator({ kind, on = false, pulse = false }) {
-  const color = on ? (pulse ? "#00E5FF" : "#f4f4f4") : "#3a3a3a";
-  const style = {
+export function PlatformIndicator({ kind, on = false, pulse = false }: PlatformIndicatorProps) {
+  const color = on ? (pulse ? '#00E5FF' : '#f4f4f4') : '#3a3a3a';
+  const style: CSSProperties = {
     color,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     width: 22,
     height: 22,
     borderRadius: 4,
   };
   if (pulse) {
-    style.boxShadow = "0 0 0 1px rgba(0,229,255,0.35), 0 0 12px -2px rgba(0,229,255,0.6)";
-    style.animation = "pulseDot 2.2s ease-in-out infinite";
+    style.boxShadow = '0 0 0 1px rgba(0,229,255,0.35), 0 0 12px -2px rgba(0,229,255,0.6)';
+    style.animation = 'pulseDot 2.2s ease-in-out infinite';
   }
   return (
     <span style={style}>
@@ -59,7 +73,7 @@ function PlatformIndicator({ kind, on = false, pulse = false }) {
 }
 
 // Catalyst logo — broken C with cyan dot, matching the brand
-function CatalystMark({ size = 22 }) {
+export function CatalystMark({ size = 22 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" style={{ marginTop: -1 }}>
       <path d="M 78 30 A 30 30 0 1 0 78 70" stroke="#f4f4f4" strokeWidth="12" strokeLinecap="round" fill="none" />
@@ -73,23 +87,23 @@ function CatalystMark({ size = 22 }) {
 // in Manrope ExtraBold with "at" white and "alyst" cyan.
 // Measures the text bounding box once Manrope is ready, then positions
 // the C so the dot reads as a counter of the letter.
-function Wordmark({ height = 30 }) {
-  const textRef = React.useRef(null);
-  const [atalystW, setAtalystW] = React.useState(880); // estimated until measured
+export function Wordmark({ height = 30 }: { height?: number }) {
+  const textRef = useRef<SVGTextElement | null>(null);
+  const [atalystW, setAtalystW] = useState(880);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let alive = true;
     const measure = () => {
       if (!alive || !textRef.current) return;
       try {
         const w = textRef.current.getBBox().width;
         if (w > 0) setAtalystW(w);
-      } catch (e) {
+      } catch {
         /* getBBox can throw if SVG not yet rendered; retry shortly */
       }
     };
     if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(measure);
+      void document.fonts.ready.then(measure);
     }
     const t1 = setTimeout(measure, 120);
     const t2 = setTimeout(measure, 600);
@@ -98,19 +112,19 @@ function Wordmark({ height = 30 }) {
 
   // Construction parameters — match Cover.html exactly so the proportions
   // (stroke weight, x-height, dot diameter, kerning) are identical.
-  const F = 264;                // font size in svg user units
-  const xH = F * 0.530;         // Manrope ExtraBold approx x-height
-  const stroke = F * 0.160;     // C stroke weight matching the type weight
-  const baselineY = 600;        // arbitrary; viewBox is normalised below
+  const F = 264;
+  const xH = F * 0.530;
+  const stroke = F * 0.160;
+  const baselineY = 600;
   const kerning = -2;
-  const cWidth = xH;            // visual width of the C = its diameter
+  const cWidth = xH;
   const cOuterR = xH / 2;
   const cCenterR = cOuterR - stroke / 2;
   const cCy = baselineY - xH / 2;
 
   const totalW = cWidth + kerning + atalystW;
   const cCx = cOuterR;
-  const a = Math.PI / 4;        // 45° opening on the right
+  const a = Math.PI / 4;
   const x1 = cCx + cCenterR * Math.cos(-a);
   const y1 = cCy + cCenterR * Math.sin(-a);
   const x2 = cCx + cCenterR * Math.cos(a);
@@ -121,7 +135,6 @@ function Wordmark({ height = 30 }) {
   const dotCx = cCx + cCenterR;
   const dotCy = cCy;
 
-  // Tight viewBox around glyphs — leave room for the dot halo on the right.
   const vbTop = baselineY - F * 0.78;
   const vbHeight = F * 0.92;
   const haloR = dotR * 2.6;
@@ -131,7 +144,7 @@ function Wordmark({ height = 30 }) {
     <svg
       height={height}
       viewBox={`${-haloR * 0.2} ${vbTop} ${vbWidth + haloR * 0.4} ${vbHeight}`}
-      style={{ display: "block", overflow: "visible" }}
+      style={{ display: 'block', overflow: 'visible' }}
       aria-label="Catalyst"
     >
       <text
@@ -142,19 +155,14 @@ function Wordmark({ height = 30 }) {
         fontWeight="800"
         fontSize={F}
         letterSpacing={-2}
-        style={{ dominantBaseline: "alphabetic" }}
+        style={{ dominantBaseline: 'alphabetic' }}
       >
         <tspan fill="#ffffff">at</tspan>
         <tspan fill="#00E5FF">alyst</tspan>
       </text>
       <path d={cPath} stroke="#ffffff" strokeWidth={stroke} strokeLinecap="round" fill="none" />
-      <circle cx={dotCx} cy={dotCy} r={haloR} fill="#00E5FF" opacity="0.4" style={{ filter: "blur(10px)" }} />
+      <circle cx={dotCx} cy={dotCy} r={haloR} fill="#00E5FF" opacity="0.4" style={{ filter: 'blur(10px)' }} />
       <circle cx={dotCx} cy={dotCy} r={dotR} fill="#00E5FF" />
     </svg>
   );
 }
-
-window.PlatformIcon = PlatformIcon;
-window.PlatformIndicator = PlatformIndicator;
-window.CatalystMark = CatalystMark;
-window.Wordmark = Wordmark;

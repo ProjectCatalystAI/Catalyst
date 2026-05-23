@@ -1,11 +1,22 @@
-/* global React */
-const { useState: useStateUp, useRef: useRefUp } = React;
+import { useRef, useState } from 'react';
 
-function Upload({ onCancel, onIngest }) {
-  const [over, setOver] = useStateUp(false);
-  const inputRef = useRefUp(null);
+export interface IngestPayload {
+  name: string;
+  filename: string;
+  size: number;
+  file: File;
+}
 
-  function handleFiles(files) {
+interface UploadProps {
+  onCancel: () => void;
+  onIngest: (payload: IngestPayload) => void;
+}
+
+export default function Upload({ onCancel, onIngest }: UploadProps) {
+  const [over, setOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     const f = files[0];
     const raw = f.name || "Untitled catalogue.csv";
@@ -103,5 +114,3 @@ function Upload({ onCancel, onIngest }) {
     </section>
   );
 }
-
-window.Upload = Upload;

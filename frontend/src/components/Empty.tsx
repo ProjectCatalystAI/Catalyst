@@ -1,6 +1,8 @@
-/* global React, PlatformIndicator */
+interface EmptyProps {
+  onAdd: () => void;
+}
 
-function EmptyState({ onAdd }) {
+export default function Empty({ onAdd }: EmptyProps) {
   // Ghost rows mimic the populated activation-ranking list, faded back so the
   // user sees what the screen will contain once a catalogue is added.
   const ghostRows = [
@@ -74,11 +76,11 @@ function EmptyState({ onAdd }) {
 
             <ol className="flex flex-col gap-px mb-7 rounded-md overflow-hidden" style={{ background: "#1f1f1f", border: "1px solid #1f1f1f" }}>
               {[
-                ["01", <span><b className="text-fg font-medium">Drop a CSV</b>: artist and title are all you need. The filename becomes the catalogue name.</span>],
-                ["02", <span>Catalyst runs <b className="text-fg font-medium">14 agents per track</b> across the four platforms, then summarises.</span>],
-                ["03", <span>You see the tracks worth playing this week, with the reasoning behind each one.</span>],
+                ["01", <span key="1"><b className="text-fg font-medium">Drop a CSV</b>: artist and title are all you need. The filename becomes the catalogue name.</span>],
+                ["02", <span key="2">Catalyst runs <b className="text-fg font-medium">14 agents per track</b> across the four platforms, then summarises.</span>],
+                ["03", <span key="3">You see the tracks worth playing this week, with the reasoning behind each one.</span>],
               ].map(([n, t]) => (
-                <li key={n} className="grid gap-4 px-4 py-3 items-baseline" style={{ gridTemplateColumns: "36px 1fr", background: "#111" }}>
+                <li key={n as string} className="grid gap-4 px-4 py-3 items-baseline" style={{ gridTemplateColumns: "36px 1fr", background: "#111" }}>
                   <span className="mono text-[10.5px] uppercase" style={{ letterSpacing: "0.12em", color: "#5e5e5e" }}>{n}</span>
                   <span className="text-[13px] leading-[1.5] tightish" style={{ color: "#8a8a8a" }}>{t}</span>
                 </li>
@@ -102,5 +104,3 @@ function EmptyState({ onAdd }) {
     </section>
   );
 }
-
-window.EmptyState = EmptyState;
