@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "packages": {
+    "python": "3.11",
+    "node": "20"
+  },
+  "buildAptPackages": ["ffmpeg"],
+  "steps": {
+    "install": {
+      "commands": [
+        { "src": "backend/requirements.txt", "dest": "backend/requirements.txt" },
+        "python -m venv /opt/venv && /opt/venv/bin/pip install --upgrade pip && /opt/venv/bin/pip install -r backend/requirements.txt",
+        { "src": "frontend/package.json", "dest": "frontend/package.json" },
+        { "src": "frontend/package-lock.json", "dest": "frontend/package-lock.json" },
+        "cd frontend && npm ci"
+      ]
+    },
+    "build": {
+      "inputs": [{ "step": "install" }],
+      "commands": [
+        { "src": ".", "dest": "." },
+        "cd frontend && npm run build"
+      ]
+    }
+  },
+  "deploy": {
+    "aptPackages": ["ffmpeg"],
+    "paths": ["/opt/venv/bin"],
+    "startCommand": "uvicorn src.api:app --app-dir backend --host 0.0.0.0 --port $PORT"
+  }
+}
