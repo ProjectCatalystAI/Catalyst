@@ -350,6 +350,108 @@ def fetch_top5_youtube_shorts(track_id: int) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Per-source summary helpers — one per platform
+# ---------------------------------------------------------------------------
+@tool
+def fetch_spotify_analyses(track_id: int) -> dict:
+    """Fetch every Spotify analysis stored for a track (current + historic)."""
+    with _db.session() as s:
+        track = s.query(Track).filter_by(id=track_id).one_or_none()
+        if track is None:
+            return {"error": f"no track row for track_id={track_id}"}
+        spotify = s.query(SpotifyTrack).filter_by(track_id=track_id).one_or_none()
+        spotify_hist = (
+            s.query(SpotifyTrackHistoric)
+            .filter_by(track_id=track_id)
+            .order_by(SpotifyTrackHistoric.date.desc())
+            .first()
+        )
+        return {
+            "title": track.title,
+            "current": spotify.analysis if spotify else None,
+            "historic": spotify_hist.analysis if spotify_hist else None,
+        }
+
+
+@tool
+def fetch_instagram_analyses(track_id: int) -> dict:
+    """Fetch every Instagram analysis stored for a track (current + historic + videos)."""
+    with _db.session() as s:
+        track = s.query(Track).filter_by(id=track_id).one_or_none()
+        if track is None:
+            return {"error": f"no track row for track_id={track_id}"}
+        instagram = s.query(InstagramTrack).filter_by(track_id=track_id).one_or_none()
+        instagram_hist = (
+            s.query(InstagramTrackHistoric)
+            .filter_by(track_id=track_id)
+            .order_by(InstagramTrackHistoric.date.desc())
+            .first()
+        )
+        videos = []
+        if instagram is not None:
+            videos = [v.analysis for v in instagram.videos if v.analysis]
+        return {
+            "title": track.title,
+            "current": instagram.analysis if instagram else None,
+            "historic": instagram_hist.analysis if instagram_hist else None,
+            "top_videos": videos,
+        }
+
+
+@tool
+def fetch_tiktok_analyses(track_id: int) -> dict:
+    """Fetch every TikTok analysis stored for a track (current + historic + videos)."""
+    with _db.session() as s:
+        track = s.query(Track).filter_by(id=track_id).one_or_none()
+        if track is None:
+            return {"error": f"no track row for track_id={track_id}"}
+        tiktok = s.query(TiktokTrack).filter_by(track_id=track_id).one_or_none()
+        tiktok_hist = (
+            s.query(TiktokTrackHistoric)
+            .filter_by(track_id=track_id)
+            .order_by(TiktokTrackHistoric.date.desc())
+            .first()
+        )
+        videos = []
+        if tiktok is not None:
+            videos = [v.analysis for v in tiktok.videos if v.analysis]
+        return {
+            "title": track.title,
+            "current": tiktok.analysis if tiktok else None,
+            "historic": tiktok_hist.analysis if tiktok_hist else None,
+            "top_videos": videos,
+        }
+
+
+@tool
+def fetch_youtube_analyses(track_id: int) -> dict:
+    """Fetch every YouTube analysis stored for a track (current + historic + videos + shorts)."""
+    with _db.session() as s:
+        track = s.query(Track).filter_by(id=track_id).one_or_none()
+        if track is None:
+            return {"error": f"no track row for track_id={track_id}"}
+        youtube = s.query(YoutubeTrack).filter_by(track_id=track_id).one_or_none()
+        youtube_hist = (
+            s.query(YoutubeTrackHistoric)
+            .filter_by(track_id=track_id)
+            .order_by(YoutubeTrackHistoric.date.desc())
+            .first()
+        )
+        videos = []
+        shorts = []
+        if youtube is not None:
+            videos = [v.analysis for v in youtube.videos if v.analysis]
+            shorts = [v.analysis for v in youtube.shorts if v.analysis]
+        return {
+            "title": track.title,
+            "current": youtube.analysis if youtube else None,
+            "historic": youtube_hist.analysis if youtube_hist else None,
+            "top_videos": videos,
+            "top_shorts": shorts,
+        }
+
+
+# ---------------------------------------------------------------------------
 # Summary helper — used by the Track Summarizer
 # ---------------------------------------------------------------------------
 @tool

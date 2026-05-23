@@ -16,7 +16,7 @@ Built for the [Featherless Track · AI Agent Olympics · Milan AI Week 2026](htt
 Each analysis run:
 1. Loads a catalogue from CSV
 2. Fetches current and historical metrics from Spotify, Instagram, TikTok, and YouTube
-3. Runs 14 track-level agents and 9 artist-level agents via [Featherless](https://featherless.ai) (Kimi K2.6)
+3. Runs 14 track-level agents and 9 artist-level agents via [OpenRouter](https://openrouter.ai) (Gemini 3.1 Flash Lite)
 4. Produces a per-track summary with seasonal timing, platform signals, and top video context
 5. Ranks the catalogue by activation readiness
 
@@ -56,9 +56,9 @@ React frontend                         ← live trace + results UI
 
 ### Agent model
 
-Every agent is built on the [Strands](https://github.com/strands-agents/sdk-python) framework. Each one receives a set of `@tool` functions that query the database, calls the LLM (Kimi K2.6 via Featherless), and writes its output back to the database. No agent shares state mid-run — they read from DB, reason, write to DB.
+Every agent is built on the [Strands](https://github.com/strands-agents/sdk-python) framework. Each one receives a set of `@tool` functions that query the database, calls the LLM (Gemini 3.1 Flash Lite via OpenRouter), and writes its output back to the database. No agent shares state mid-run — they read from DB, reason, write to DB.
 
-The **video pipeline** (`src/agents/video_pipeline.py`) downloads short-form videos via `yt-dlp`, extracts 8 frames with `ffmpeg`, and sends them to Kimi K2.6 for a 2–4 sentence description. This feeds the `instagram_video`, `tiktok_video`, `youtube_video`, and `youtube_shorts` agents.
+The **video pipeline** (`src/agents/video_pipeline.py`) downloads short-form videos via `yt-dlp`, extracts 8 frames with `ffmpeg`, and sends them to a multimodal model (Nemotron 3 Nano Omni via OpenRouter) for a 2–4 sentence description. This feeds the `instagram_video`, `tiktok_video`, `youtube_video`, and `youtube_shorts` agents.
 
 The **period agent** maps each track against 9 cultural anchors (Valentine's Day, Festival Season, Summer, Halloween, Christmas, etc.) and calculates the 90-day pre-peak work window to identify what needs activating now.
 
@@ -68,7 +68,7 @@ The **period agent** maps each track against 9 cultural anchors (Valentine's Day
 
 | Layer | Technology |
 |---|---|
-| Inference | [Featherless](https://featherless.ai) — Kimi K2.6 (reasoning), lighter models for synthesis |
+| Inference | [OpenRouter](https://openrouter.ai) — Gemini 3.1 Flash Lite (text), Nemotron 3 Nano Omni (video understanding) |
 | Agent framework | [Strands](https://github.com/strands-agents/sdk-python) |
 | API | FastAPI + Uvicorn |
 | MCP server | FastMCP |
@@ -110,7 +110,7 @@ cp .env.example .env
 | `SPOTIFY_CLIENT_SECRET` | Same |
 | `LASTFM_API_KEY` | [Last.fm API](https://www.last.fm/api/account/create) |
 | `LASTFM_API_SECRET` | Same |
-| `FEATHERLESS_API_KEY` | [featherless.ai](https://featherless.ai) |
+| `OPENROUTER_API_KEY` | [openrouter.ai/keys](https://openrouter.ai/keys) |
 | `SONGSTATS_API_KEY` | [Songstats](https://songstats.com/developers) |
 
 ---
@@ -124,7 +124,7 @@ Build the frontend, then start the API — FastAPI serves both `/api/*` and the 
 ```bash
 cd frontend && npm install && npm run build
 cd ..
-uvicorn src.api:app --reload
+uvicorn src.api:app --app-dir backend --reload
 ```
 
 Open `http://localhost:8000`.
@@ -133,7 +133,7 @@ Open `http://localhost:8000`.
 
 ```bash
 # Terminal 1 — API
-uvicorn src.api:app --reload
+uvicorn src.api:app --app-dir backend --reload
 
 # Terminal 2 — Vite dev server with HMR; proxies /api → :8000
 cd frontend
@@ -148,28 +148,30 @@ Open `http://localhost:5173`.
 ## Project structure
 
 ```
-src/
-├── agents/
-│   ├── model.py               # Featherless model factory
-│   ├── prompts.py             # System prompts for all 23 agents
-│   ├── video_pipeline.py      # yt-dlp + ffmpeg + vision analysis
-│   ├── tools/
-│   │   ├── db_fetch.py        # @tool functions for DB queries
-│   │   └── period.py          # Cultural calendar tools
-│   ├── spotify_track.py
-│   ├── instagram_track.py
-│   ├── tiktok_track.py
-│   ├── youtube_track.py
-│   ├── period_track.py
-│   ├── track_summarizer.py
-│   └── ...                    # artist-level agents
-├── api.py                     # FastAPI app + job orchestration
-├── db.py                      # SQLAlchemy models
-├── load_catalogue.py          # CSV → DB ingestion pipeline
-├── streaming_analyst.py       # Platform API integration layer
-├── import_catalogue.py        # CLI import tool
-├── server.py                  # FastMCP setup
-└── __main__.py                # MCP entry point
+backend/
+├── requirements.txt
+└── src/
+    ├── agents/
+    │   ├── model.py               # OpenRouter model factory
+    │   ├── prompts.py             # System prompts for all 23 agents
+    │   ├── video_pipeline.py      # yt-dlp + ffmpeg + vision analysis
+    │   ├── tools/
+    │   │   ├── db_fetch.py        # @tool functions for DB queries
+    │   │   └── period.py          # Cultural calendar tools
+    │   ├── spotify_track.py
+    │   ├── instagram_track.py
+    │   ├── tiktok_track.py
+    │   ├── youtube_track.py
+    │   ├── period_track.py
+    │   ├── track_summarizer.py
+    │   └── ...                    # artist-level agents
+    ├── api.py                     # FastAPI app + job orchestration
+    ├── db.py                      # SQLAlchemy models
+    ├── load_catalogue.py          # CSV → DB ingestion pipeline
+    ├── streaming_analyst.py       # Platform API integration layer
+    ├── import_catalogue.py        # CLI import tool
+    ├── server.py                  # FastMCP setup
+    └── __main__.py                # MCP entry point
 
 frontend/                      # Vite + React + TypeScript app
 ├── index.html

@@ -12,8 +12,9 @@ import re
 import sys
 import tempfile
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 # Allow bare imports from src/ (needed by streaming_analyst → server)
 _src_dir = str(Path(__file__).parent)
@@ -30,6 +31,12 @@ from src.agents.runner import (
     TRACK_AGENT_NAMES,
     run_artist_agent,
     run_track_agent,
+)
+from src.agents.summarizer import (
+    instagram_track_summarizer,
+    spotify_track_summarizer,
+    tiktok_track_summarizer,
+    youtube_track_summarizer,
 )
 from src.db import (
     Artist,
@@ -144,6 +151,9 @@ class _Job:
     step: str
     catalogue_id: int | None = None
     error: str | None = None
+    # In-memory per-source summaries: {track_id: {"spotify": "...", ...}}.
+    # Not persisted to the DB on purpose — regenerated per catalogue run.
+    source_summaries: dict[int, dict[str, str]] = field(default_factory=dict)
 
 
 _jobs: dict[int, _Job] = {}
@@ -194,7 +204,10 @@ _AGENT_LABEL: dict[str, str] = {
     "youtube_video":           "Reading top 5 YouTube videos per flagged track",
     "youtube_shorts":          "Reading YouTube Shorts seeding signals",
     "period_track":            "Aligning tracks to calendar windows",
-    "track_summarizer":        "Composing per-track reasoning",
+    "spotify_summary":         "Summarising Spotify signals",
+    "instagram_summary":       "Summarising Instagram signals",
+    "tiktok_summary":          "Summarising TikTok signals",
+    "youtube_summary":         "Summarising YouTube signals",
     "spotify_artist":          "Reading artist profiles · Spotify",
     "instagram_artist":        "Reading artist profiles · Instagram",
     "tiktok_artist":           "Reading artist profiles · TikTok",
@@ -216,7 +229,30 @@ def _signal(views: int | None) -> int:
     return 2 if views > 500_000 else 1
 
 
-def _build_results(catalogue_db_id: int, catalogue_name: str) -> dict:
+_SOURCE_SUMMARIZERS: dict[str, Callable[[], object]] = {
+    "spotify": spotify_track_summarizer,
+    "instagram": instagram_track_summarizer,
+    "tiktok": tiktok_track_summarizer,
+    "youtube": youtube_track_summarizer,
+}
+
+
+def _run_source_summary(source: str, track_id: int) -> str:
+    """Run a per-source summarizer for one track. Returns the summary text.
+
+    Does NOT persist to the DB — callers store the result in memory.
+    """
+    agent = _SOURCE_SUMMARIZERS[source]()
+    response = agent(f"Analyze the data for track_id={track_id}.")
+    return str(response).strip()
+
+
+def _build_results(
+    catalogue_db_id: int,
+    catalogue_name: str,
+    source_summaries: dict[int, dict[str, str]] | None = None,
+) -> dict:
+    source_summaries = source_summaries or {}
     db = Database()
     with db.session() as s:
         tracks = s.query(Track).filter_by(catalog_id=catalogue_db_id).all()
@@ -241,8 +277,7 @@ def _build_results(catalogue_db_id: int, catalogue_name: str) -> dict:
 
             hot_platform = any(v == 2 for v in signals.values())
             seasonal_hot = hot_platform and bool(track.analysis)
-            social_hot = hot_platform and bool(track.summary)
-            lit = bool(track.summary or track.analysis)
+            lit = bool(track.analysis)
             year = track.release_date.year if track.release_date else None
 
             seasonal_stats: dict[str, str] = {}
@@ -271,12 +306,33 @@ def _build_results(catalogue_db_id: int, catalogue_name: str) -> dict:
                 if yt.shorts_count:
                     social_stats["YT shorts"] = str(yt.shorts_count)
 
+            artist_genres = list(artist.genres or []) if artist else []
+            track_genres = list(track.genres or [])
+            genres = track_genres + [g for g in artist_genres if g not in track_genres]
+
+            sources = source_summaries.get(track.id, {})
+            sources_payload = {
+                "spotify": sources.get("spotify", ""),
+                "instagram": sources.get("instagram", ""),
+                "tiktok": sources.get("tiktok", ""),
+                "youtube": sources.get("youtube", ""),
+            }
+            # Pick the first non-empty source summary as the collapsed-row synth.
+            social_synth_source = next(
+                (sources_payload[k] for k in ("spotify", "instagram", "tiktok", "youtube")
+                 if sources_payload[k]),
+                "",
+            )
+            social_lit = bool(social_synth_source)
+            social_hot = hot_platform and social_lit
+
             result_tracks.append({
                 "id": track.id,
                 "title": track.title,
                 "artist": artist.name if artist else "Unknown",
                 "year": year,
-                "lit": lit,
+                "genres": genres,
+                "lit": lit or social_lit,
                 "seasonal": {
                     "synth": _first_sentence(track.analysis),
                     "reason": track.analysis or "",
@@ -285,11 +341,12 @@ def _build_results(catalogue_db_id: int, catalogue_name: str) -> dict:
                     "stats": seasonal_stats,
                 },
                 "social": {
-                    "synth": _first_sentence(track.summary),
-                    "reason": track.summary or "",
+                    "synth": _first_sentence(social_synth_source),
+                    "reason": social_synth_source,
                     "hot": social_hot,
                     "signals": signals,
                     "stats": social_stats,
+                    "sources": sources_payload,
                 },
             })
 
@@ -320,12 +377,12 @@ def _process_catalogue_sync(job_id: int, csv_path: str, name: str) -> None:
 
         _update_job(job_id, track_count=len(track_ids))
 
-        # Track agents: 5% → 80%
+        # Track agents: 5% → 75%
         track_total = len(track_ids) * len(TRACK_AGENT_NAMES)
         done = 0
         for track_id in track_ids:
             for agent_name in TRACK_AGENT_NAMES:
-                pct = 5 + int(75 * done / max(track_total, 1))
+                pct = 5 + int(70 * done / max(track_total, 1))
                 _update_job(job_id, status="analyzing", pct=pct,
                             agent=agent_name,
                             step=_AGENT_LABEL.get(agent_name, agent_name))
@@ -335,6 +392,28 @@ def _process_catalogue_sync(job_id: int, csv_path: str, name: str) -> None:
                     logger.warning("Agent %s failed for track %s: %s",
                                    agent_name, track_id, exc)
                 done += 1
+
+        # Per-source summaries (in-memory, not persisted): 75% → 80%
+        _SOURCES = ("spotify", "instagram", "tiktok", "youtube")
+        source_total = len(track_ids) * len(_SOURCES)
+        done_s = 0
+        job = _jobs.get(job_id)
+        for track_id in track_ids:
+            per_track: dict[str, str] = {}
+            for source in _SOURCES:
+                pct = 75 + int(5 * done_s / max(source_total, 1))
+                _update_job(job_id, pct=pct,
+                            agent=f"{source}_summary",
+                            step=_AGENT_LABEL.get(f"{source}_summary", source))
+                try:
+                    per_track[source] = _run_source_summary(source, track_id)
+                except Exception as exc:
+                    logger.warning("Source summary %s failed for track %s: %s",
+                                   source, track_id, exc)
+                    per_track[source] = ""
+                done_s += 1
+            if job is not None:
+                job.source_summaries[track_id] = per_track
 
         # Artist agents: 80% → 97%
         artist_total = len(artist_ids) * len(ARTIST_AGENT_NAMES)
@@ -426,10 +505,10 @@ def get_catalogue_results(catalogue_id: int) -> dict:
         raise HTTPException(status_code=500, detail=job.error or "Processing failed")
     if job.status != "done" or job.catalogue_id is None:
         raise HTTPException(status_code=202, detail="Processing not complete")
-    return _build_results(job.catalogue_id, job.name)
+    return _build_results(job.catalogue_id, job.name, job.source_summaries)
 
 
 # Serve the frontend — must come last so API routes take precedence
-_web_dir = Path(__file__).parent.parent / "frontend" / "dist"
+_web_dir = Path(__file__).parent.parent.parent / "frontend" / "dist"
 if _web_dir.is_dir():
     app.mount("/", StaticFiles(directory=_web_dir, html=True), name="static")

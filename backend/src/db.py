@@ -8,8 +8,6 @@ the APIs and some columns that will be filled in by the Agent.
 
 Tables:
 
-* genre
-* track_genre
 * catalog
 * artist
 * spotify_artist
@@ -37,34 +35,12 @@ Tables:
 
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import JSON, Date, ForeignKey, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
-
-
-# ===========================================================================
-# Genre
-# ===========================================================================
-class Genre(Base):
-    __tablename__ = "genre"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String, unique=True)
-
-    tracks: Mapped[list["TrackGenre"]] = relationship(back_populates="genre")
-
-
-class TrackGenre(Base):
-    __tablename__ = "track_genre"
-
-    track_id: Mapped[int] = mapped_column(ForeignKey("track.id"), primary_key=True)
-    genre_id: Mapped[int] = mapped_column(ForeignKey("genre.id"), primary_key=True)
-
-    track: Mapped["Track"] = relationship(back_populates="genres")
-    genre: Mapped["Genre"] = relationship(back_populates="tracks")
 
 
 # ===========================================================================
@@ -90,6 +66,7 @@ class Artist(Base):
     name: Mapped[str] = mapped_column(String)
     country: Mapped[str | None] = mapped_column(String)
     bio: Mapped[str | None] = mapped_column(Text)
+    genres: Mapped[list[str]] = mapped_column(JSON, default=list)
     analysis: Mapped[str | None] = mapped_column(Text)
 
     tracks: Mapped[list["Track"]] = relationship(back_populates="artist")
@@ -262,6 +239,7 @@ class Track(Base):
     title: Mapped[str] = mapped_column(String)
     collaborators: Mapped[str | None] = mapped_column(String)
     release_date: Mapped[date | None] = mapped_column(Date)
+    genres: Mapped[list[str]] = mapped_column(JSON, default=list)
     analysis: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)
     instagram_analysis: Mapped[str | None] = mapped_column(Text)
@@ -274,7 +252,6 @@ class Track(Base):
 
     catalog: Mapped["Catalog"] = relationship(back_populates="tracks")
     artist: Mapped["Artist"] = relationship(back_populates="tracks")
-    genres: Mapped[list["TrackGenre"]] = relationship(back_populates="track")
     spotify: Mapped["SpotifyTrack | None"] = relationship(back_populates="track")
     spotify_historic: Mapped[list["SpotifyTrackHistoric"]] = relationship(
         back_populates="track"

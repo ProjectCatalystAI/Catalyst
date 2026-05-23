@@ -1146,6 +1146,24 @@ def get_track_isrc(spotify_track_id: str) -> str | None:
     return r.json().get("external_ids", {}).get("isrc")
 
 
+def get_artist_genres(spotify_artist_id: str) -> list[str]:
+    """
+    Get genres for an artist from the Spotify API.
+
+    :param spotify_artist_id: Spotify artist ID
+    :returns: list of genre name strings (may be empty)
+    :raises requests.HTTPError: if the API call fails
+    """
+    access_token = token.get()
+    r = requests.get(
+        f"https://api.spotify.com/v1/artists/{spotify_artist_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json().get("genres", [])
+
+
 # ==============================================================================
 # MusicBrainz Functions
 # ==============================================================================

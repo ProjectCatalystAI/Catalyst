@@ -32,7 +32,7 @@ from src.agents.spotify import (
     spotify_track_analyzer,
     spotify_track_historic_analyzer,
 )
-from src.agents.summarizer import artist_summarizer, track_summarizer
+from src.agents.summarizer import artist_summarizer
 from src.agents.tiktok import (
     tiktok_artist_analyzer,
     tiktok_artist_historic_analyzer,
@@ -246,18 +246,6 @@ def _run_period_track(track_id: int) -> str:
     return text
 
 
-def _run_track_summarizer(track_id: int) -> str:
-    text = _run(track_summarizer(), track_id)
-    with _db.session() as s:
-        row = s.query(Track).filter_by(id=track_id).one_or_none()
-        if row is None:
-            logger.warning("No track row id=%s; skipping summary save", track_id)
-            return text
-        row.summary = text
-        s.commit()
-    return text
-
-
 TRACK_AGENT_REGISTRY: dict[str, Callable[[int], str]] = {
     "spotify_track": _run_spotify_track,
     "spotify_track_historic": _run_spotify_track_historic,
@@ -272,7 +260,6 @@ TRACK_AGENT_REGISTRY: dict[str, Callable[[int], str]] = {
     "youtube_video": _run_youtube_video,
     "youtube_shorts": _run_youtube_shorts,
     "period_track": _run_period_track,
-    "track_summarizer": _run_track_summarizer,
 }
 
 TRACK_AGENT_NAMES = tuple(TRACK_AGENT_REGISTRY.keys())

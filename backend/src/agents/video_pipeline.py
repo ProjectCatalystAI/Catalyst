@@ -1,8 +1,8 @@
 """Video download + multimodal description pipeline.
 
 Downloads a video from any supported URL (Instagram Reels, TikTok, YouTube,
-YouTube Shorts) via yt-dlp, samples N frames using ffmpeg, and asks the
-Featherless-hosted Kimi-K2.6 model to describe the content.
+YouTube Shorts) via yt-dlp, samples N frames using ffmpeg, and asks an
+OpenRouter-hosted multimodal model to describe the content.
 
 The CLI tools `yt-dlp` and `ffmpeg` are expected to be on PATH.
 """
@@ -23,7 +23,7 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-from src.agents.model import FEATHERLESS_BASE_URL, MODEL_ID
+from src.agents.model import OPENROUTER_BASE_URL, VIDEO_MODEL_ID
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ POST_CALL_SETTLE_SECONDS = 1.0
 YTDLP_IMPERSONATE = os.environ.get("YTDLP_IMPERSONATE", "chrome")
 YTDLP_COOKIES_FROM_BROWSER = os.environ.get("YTDLP_COOKIES_FROM_BROWSER", "chrome")
 
-_kimi_call_lock = threading.Lock()
+_video_call_lock = threading.Lock()
 
 
 def _download(url: str, workdir: Path) -> Path:
@@ -80,10 +80,10 @@ def _extract_frames(video_path: Path, workdir: Path, n: int = NUM_FRAMES) -> lis
     return frames[:n]
 
 
-def _describe_with_kimi(frames: list[Path]) -> str:
-    api_key = os.environ.get("FEATHERLESS_API_KEY")
+def _describe_with_video_model(frames: list[Path]) -> str:
+    api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        raise RuntimeError("FEATHERLESS_API_KEY is not set")
+        raise RuntimeError("OPENROUTER_API_KEY is not set")
 
     content: list[dict] = [
         {
@@ -106,22 +106,23 @@ def _describe_with_kimi(frames: list[Path]) -> str:
         )
 
     body = {
-        "model": MODEL_ID,
+        "model": VIDEO_MODEL_ID,
         "messages": [{"role": "user", "content": content}],
         "max_tokens": 1200,
         "temperature": 0.3,
+        "provider": {"sort": "throughput"},
     }
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
 
-    with _kimi_call_lock:
+    with _video_call_lock:
         try:
             for attempt in range(RATE_LIMIT_MAX_RETRIES + 1):
                 try:
                     resp = requests.post(
-                        f"{FEATHERLESS_BASE_URL}/chat/completions",
+                        f"{OPENROUTER_BASE_URL}/chat/completions",
                         headers=headers,
                         json=body,
                         timeout=180,
@@ -135,7 +136,7 @@ def _describe_with_kimi(frames: list[Path]) -> str:
                     )
                     delay += random.uniform(0, delay * 0.25)
                     logger.info(
-                        "Featherless network error on attempt %d/%d (%s); "
+                        "OpenRouter network error on attempt %d/%d (%s); "
                         "sleeping %.1fs before retry",
                         attempt + 1,
                         RATE_LIMIT_MAX_RETRIES,
@@ -158,7 +159,7 @@ def _describe_with_kimi(frames: list[Path]) -> str:
                         )
                         delay += random.uniform(0, delay * 0.25)
                     logger.info(
-                        "Featherless %s on attempt %d/%d; sleeping %.1fs before retry",
+                        "OpenRouter %s on attempt %d/%d; sleeping %.1fs before retry",
                         resp.status_code,
                         attempt + 1,
                         RATE_LIMIT_MAX_RETRIES,
@@ -174,7 +175,7 @@ def _describe_with_kimi(frames: list[Path]) -> str:
                 if not text:
                     text = (message.get("reasoning") or "").strip()
                 if not text:
-                    raise RuntimeError("Featherless returned an empty description")
+                    raise RuntimeError("OpenRouter returned an empty description")
                 return text
 
             raise RuntimeError("unreachable")
@@ -206,9 +207,9 @@ def describe_video(url: str) -> str:
             return f"unavailable: frame extraction failed ({url})"
 
         try:
-            return _describe_with_kimi(frames)
+            return _describe_with_video_model(frames)
         except Exception as e:
-            logger.warning("Kimi description failed for %s: %s", url, e)
+            logger.warning("Video model description failed for %s: %s", url, e)
             return f"unavailable: model error ({url})"
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

@@ -7,6 +7,13 @@ import type { Catalogue, Lens, LensView, PlatformKey, Signals, Track } from '../
 
 const PLATFORM_ORDER: PlatformKey[] = ['spotify', 'instagram', 'tiktok', 'youtube'];
 
+const PLATFORM_LABEL: Record<PlatformKey, string> = {
+  spotify: 'Spotify',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+};
+
 const EMPTY_SIGNALS: Signals = { spotify: 0, instagram: 0, tiktok: 0, youtube: 0 };
 
 type DetailEntry = { seasonal: LensView; social: LensView };
@@ -94,12 +101,36 @@ function ResultRow({ track, lens, details, expanded, onClick }: ResultRowProps) 
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2.5">
               <span className="mono text-[10px] uppercase" style={{ letterSpacing: "0.16em", color: "rgba(0,229,255,0.7)" }}>
-                {lens === "seasonal" ? "Period · Summarizer" : "Social · Summarizer"}
+                {lens === "seasonal" ? "Period · Summarizer" : "Social · Per-source synthesis"}
               </span>
             </div>
-            <p className="text-[15px] leading-[1.65] tightish max-w-[60ch]" style={{ color: "#f4f4f4", textWrap: "pretty" }}>
-              {view ? view.reason : "No reasoning generated for this lens."}
-            </p>
+            {lens === "social" && view?.sources ? (
+              <div className="flex flex-col gap-4 max-w-[60ch]">
+                {PLATFORM_ORDER.map(k => {
+                  const text = view.sources?.[k] ?? "";
+                  const empty = !text;
+                  return (
+                    <div key={k} style={{ opacity: empty ? 0.4 : 1 }}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span style={{ color: empty ? "#3a3a3a" : "#f4f4f4", display: "inline-flex" }}>
+                          <PlatformIcon kind={k} size={13} />
+                        </span>
+                        <span className="mono text-[10px] uppercase" style={{ letterSpacing: "0.16em", color: empty ? "#3a3a3a" : "#8a8a8a" }}>
+                          {PLATFORM_LABEL[k]}
+                        </span>
+                      </div>
+                      <p className="text-[14px] leading-[1.6] tightish" style={{ color: "#f4f4f4", textWrap: "pretty" }}>
+                        {text || "No analysis available for this source."}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[15px] leading-[1.65] tightish max-w-[60ch]" style={{ color: "#f4f4f4", textWrap: "pretty" }}>
+                {view ? view.reason : "No reasoning generated for this lens."}
+              </p>
+            )}
             <div className="flex flex-wrap gap-1.5 mt-4">
               {Object.entries(view ? view.stats : {}).slice(0, 4).map(([k, v]) => (
                 <span key={k} className="tag" style={{ color: "#8a8a8a" }}>

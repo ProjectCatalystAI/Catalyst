@@ -7,10 +7,9 @@ File structure:
 
 * load_catalog_from_csv
 * get_or_create_artist
-* get_or_create_genre
 * populate_artist
-    Fetch and persist bio, country, and all platform stats for an artist.
-    Resolves the Spotify ID if not set. Each platform is attempted
+    Fetch and persist bio, country, genres, and all platform stats for an
+    artist. Resolves the Spotify ID if not set. Each platform is attempted
     independently; failures are logged and silently skipped.
 * populate_track
     Fetch and persist Spotify ID, ISRC, and all platform stats for a track.
@@ -33,7 +32,6 @@ from src.db import (
     Artist,
     Catalog,
     Database,
-    Genre,
     InstagramArtist,
     InstagramArtistHistoric,
     InstagramTrack,
@@ -49,7 +47,6 @@ from src.db import (
     TiktokTrackHistoric,
     TiktokVideoTrack,
     Track,
-    TrackGenre,
     YoutubeArtist,
     YoutubeArtistHistoric,
     YoutubeShortTrack,
@@ -61,6 +58,7 @@ from src.utils import parse_date
 from src.streaming_analyst import (
     token as _spotify_token,
     get_artist_bio_and_country,
+    get_artist_genres,
     get_instagram_artist_historic,
     get_instagram_artist_stats,
     get_instagram_track_historic,
@@ -132,22 +130,21 @@ def load_catalog_from_csv(
                     populate_artist(session, artist, start_date, end_date)
                     populated_artists.add(artist.id)
 
+                csv_genres = [
+                    g.strip()
+                    for g in row.get("genres", "").split(",")
+                    if g.strip()
+                ]
                 track = Track(
                     catalog_id=catalog.id,
                     artist_id=artist.id,
                     title=row["title"].strip(),
                     collaborators=row.get("collaborators", "").strip() or None,
                     release_date=parse_date(row.get("release_date", "")),
+                    genres=csv_genres,
                 )
                 session.add(track)
                 session.flush()
-
-                raw_genres = row.get("genres", "")
-                for genre_name in raw_genres.split(","):
-                    genre_name = genre_name.strip()
-                    if genre_name:
-                        genre = get_or_create_genre(session, genre_name)
-                        session.add(TrackGenre(track_id=track.id, genre_id=genre.id))
 
                 track_start = (
                     track.release_date.isoformat() if track.release_date else start_date
@@ -176,22 +173,6 @@ def get_or_create_artist(session: Session, name: str) -> Artist:
         session.add(artist)
         session.flush()
     return artist
-
-
-def get_or_create_genre(session: Session, name: str) -> Genre:
-    """
-    Retrieve an existing genre by name or create a new one if not found.
-
-    :param session: The active SQLAlchemy session.
-    :param name: The genre name to look up or create.
-    :returns: The existing or newly created Genre instance.
-    """
-    genre = session.query(Genre).filter_by(name=name).first()
-    if not genre:
-        genre = Genre(name=name)
-        session.add(genre)
-        session.flush()
-    return genre
 
 
 # ==============================================================================
@@ -243,6 +224,12 @@ def populate_artist(
             artist.country = info.get("country")
     except Exception as e:
         log.warning("Bio/country failed for '%s': %s", name, e)
+
+    try:
+        with session.begin_nested():
+            artist.genres = get_artist_genres(sid)
+    except Exception as e:
+        log.warning("Artist genres failed for '%s': %s", name, e)
 
     try:
         with session.begin_nested():
@@ -345,12 +332,9 @@ def populate_track(
 
     try:
         with session.begin_nested():
-            existing_genre_ids = {tg.genre_id for tg in session.query(TrackGenre).filter_by(track_id=track.id)}
-            for name in get_track_genres(isrc, track_sid):
-                genre = get_or_create_genre(session, name)
-                if genre.id not in existing_genre_ids:
-                    session.add(TrackGenre(track_id=track.id, genre_id=genre.id))
-                    existing_genre_ids.add(genre.id)
+            fetched = get_track_genres(isrc, track_sid)
+            existing = list(track.genres or [])
+            track.genres = existing + [g for g in fetched if g not in existing]
     except Exception as e:
         log.warning("Track genres failed for '%s': %s", title, e)
 

@@ -4,12 +4,15 @@ export type PlatformKey = 'spotify' | 'instagram' | 'tiktok' | 'youtube';
 
 export type Signals = Record<PlatformKey, number>;
 
+export type SourceSummaries = Record<PlatformKey, string>;
+
 export interface LensView {
   synth: string;
   reason: string;
   hot: boolean;
   signals: Signals;
   stats: Record<string, string>;
+  sources?: SourceSummaries;
 }
 
 export interface Track {
