@@ -1,0 +1,17 @@
+# Nixpacks config — Railway build for the FastAPI backend + Vite frontend.
+# The backend serves the built assets from frontend/dist via StaticFiles.
+
+[phases.setup]
+nixPkgs = ["python311", "nodejs_20", "ffmpeg"]
+
+[phases.install]
+cmds = [
+  "python -m venv /opt/venv && /opt/venv/bin/pip install --upgrade pip && /opt/venv/bin/pip install -r backend/requirements.txt",
+  "cd frontend && npm ci",
+]
+
+[phases.build]
+cmds = ["cd frontend && npm run build"]
+
+[start]
+cmd = "/opt/venv/bin/uvicorn src.api:app --app-dir backend --host 0.0.0.0 --port $PORT"
